@@ -17,14 +17,16 @@ from mpi4py import MPI
 from petsc4py import PETSc
 
 from eit3d import EITConfig, EITPipeline
-from eit3d.config import OUTPUTS_DIR, TOP_TAG, BOTTOM_TAG
+from eit3d.config import OUTPUTS_DIR, TOP_TAG, BOTTOM_TAG, ConsistencyTestConfig
 from eit3d.solvers.forward import ForwardSolver
 from eit3d.visualization.static import StaticRenderer
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 
 comm = MPI.COMM_WORLD
-cfg  = EITConfig()
+
+# Aumenta n_iter para ver o comportamento completo de y_n (subida)
+cfg = EITConfig(consistency=ConsistencyTestConfig(n_iter=150, base=0.9))
 pipe = EITPipeline(cfg)
 print(pipe.status())
 
@@ -35,19 +37,34 @@ eta   = pipe.build_eta()
 # Forward problem — u_gamma
 u_gamma = pipe.solve_forward(pattern=0, gamma=gamma)
 
-# Directional derivative — omega
+# Directional derivative — omega 
 omega = pipe.solve_derivative(u_gamma=u_gamma, gamma=gamma, eta=eta)
 
 mesh, facet_tags = pipe.get_mesh()
 ds_all = ufl.Measure("ds", domain=mesh)
 
+# garante ∫ω ds = 0
+integral_omega_antes = comm.allreduce(
+    dolfinx.fem.assemble_scalar(dolfinx.fem.form(omega * ds_all)), op=MPI.SUM
+)
+area_total = comm.allreduce(
+    dolfinx.fem.assemble_scalar(dolfinx.fem.form(
+        dolfinx.fem.Constant(mesh, PETSc.ScalarType(1.0)) * ds_all)), op=MPI.SUM
+)
+c_omega = integral_omega_antes / area_total
+omega.x.array[:] -= c_omega
+omega.x.scatter_forward()
+
 integral_omega = comm.allreduce(
     dolfinx.fem.assemble_scalar(dolfinx.fem.form(omega * ds_all)), op=MPI.SUM
 )
+print(f"int(omega) ds antes:  {integral_omega_antes:.2e}")
+print(f"constante subtraída:  {c_omega:.2e}")
+print(f"int(omega) ds depois: {integral_omega:.2e}  (~ 0 ✓)")
+
 norm_omega_bnd = np.sqrt(comm.allreduce(
     dolfinx.fem.assemble_scalar(dolfinx.fem.form(omega**2 * ds_all)), op=MPI.SUM
 ))
-print(f"int(omega) ds = {integral_omega:.2e}  (~ 0 expected)")
 print(f"||omega||_L2(dOmega) = {norm_omega_bnd:.4e}")
 
 # Consistency test
@@ -64,35 +81,38 @@ for k, t_n in enumerate(t_vals):
     gamma_n.x.array[:] = gamma.x.array + t_n * eta.x.array
     gamma_n.x.scatter_forward()
 
-    u_n_arr = ForwardSolver(
+    u_n = ForwardSolver(
         mesh=mesh, facet_tags=facet_tags, V=V,
         gamma=gamma_n, config=cfg.solver, comm=comm,
     ).solve(
         g_top=cfg.current.patterns[0][0],
         g_bot=cfg.current.patterns[0][1],
-    ).x.array.copy()
+    )
 
-    diff_fn.x.array[:] = (u_n_arr - u_gamma.x.array) / t_n
+    diff_fn.x.array[:] = (u_n.x.array - u_gamma.x.array) / t_n
     diff_fn.x.scatter_forward()
 
-    err   = diff_fn - omega
-    num   = np.sqrt(comm.allreduce(
+    err = diff_fn - omega
+    num = np.sqrt(comm.allreduce(
         dolfinx.fem.assemble_scalar(dolfinx.fem.form(err**2 * ds_all)), op=MPI.SUM
     ))
-    y_n   = num / norm_omega_bnd
+    y_n = num / norm_omega_bnd
     y_vals.append(y_n)
-    print(f"  n={k:2d}  t_n={t_n:.5f}  y_n={y_n:.4e}")
+    print(f"  n={k:3d}  t_n={t_n:.6f}  y_n={y_n:.4e}")
 
 y_vals  = np.array(y_vals)
 idx_min = int(np.argmin(y_vals))
 log_t   = np.log10(t_vals)
 log_y   = np.log10(y_vals)
-coeffs  = np.polyfit(log_t[:idx_min] if idx_min > 5 else log_t,
-                    log_y[:idx_min] if idx_min > 5 else log_y, 1)
+coeffs  = np.polyfit(
+    log_t[:idx_min] if idx_min > 5 else log_t,
+    log_y[:idx_min] if idx_min > 5 else log_y, 1
+)
 taxa     = coeffs[0]
 fit_line = np.polyval(coeffs, log_t[:idx_min] if idx_min > 5 else log_t)
 
-# Visualize 
+# Visualize
+print("\nRendering...")
 renderer = StaticRenderer(OUTPUTS_DIR)
 
 renderer.render_geometry(
@@ -104,11 +124,11 @@ renderer.render_geometry(
 
 topo, ct, geo = dolfinx.plot.vtk_mesh(V)
 
-grid_ug = pyvista.UnstructuredGrid(topo, ct, geo)
+grid_ug        = pyvista.UnstructuredGrid(topo, ct, geo)
 grid_ug["u_gamma"] = u_gamma.x.array.real
 renderer.render_forward(grid_ug, "u_gamma", cfg.conductivity.radius)
 
-grid_om = pyvista.UnstructuredGrid(topo, ct, geo)
+grid_om        = pyvista.UnstructuredGrid(topo, ct, geo)
 grid_om["omega"] = omega.x.array.real
 renderer.render_omega(grid_om, "omega", integral_omega)
 
@@ -118,9 +138,11 @@ renderer.render_consistency(y_vals, t_vals, taxa, fit_line, idx_min)
 print("\n" + "=" * 52)
 print("SUMMARY — DIRECTIONAL DERIVATIVE")
 print("=" * 52)
-print(f"u_gamma:        [{u_gamma.x.array.min():.4f}, {u_gamma.x.array.max():.4f}]")
-print(f"omega:          [{omega.x.array.min():.4f}, {omega.x.array.max():.4f}]")
-print(f"int(omega) ds:  {integral_omega:.2e}  (~ 0 ✓)")
-print(f"Consistency:    y_min = {y_vals[idx_min]:.4e}  (n={idx_min})")
-print(f"Log-log slope:  {taxa:.3f}  (theoretical: 1.0)")
+print(f"u_gamma:             [{u_gamma.x.array.min():.4f}, {u_gamma.x.array.max():.4f}]")
+print(f"omega:               [{omega.x.array.min():.4f}, {omega.x.array.max():.4f}]")
+print(f"int(omega) ds:       {integral_omega:.2e}  (~ 0 ✓)")
+print(f"Consistency n_iter:  {cfg.consistency.n_iter}")
+print(f"y_min:               {y_vals[idx_min]:.4e}  (n={idx_min})")
+print(f"y_n subiu após n={idx_min}:  {'✓' if idx_min < cfg.consistency.n_iter - 1 else '✗ nao visto ainda'}")
+print(f"Log-log slope:       {taxa:.3f}  (theoretical: 1.0)")
 print("=" * 52)
