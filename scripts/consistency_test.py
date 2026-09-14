@@ -25,8 +25,7 @@ from mpi4py import MPI
 from petsc4py import PETSc
 
 from eit3d import EITConfig, EITPipeline
-from eit3d.config import OUTPUTS_DIR, SolverConfig
-from eit3d.solvers.base import BaseSolver
+from eit3d.config import OUTPUTS_DIR
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 
@@ -38,22 +37,17 @@ print(pipe.status())
 mesh, facet_tags = pipe.get_mesh()
 V                = pipe.get_function_space()
 
-# gamma = 1 constant 
-gamma = dolfinx.fem.Constant(mesh, PETSc.ScalarType(1.0))
+gamma  = dolfinx.fem.Constant(mesh, PETSc.ScalarType(1.0))
 
 mesh.topology.create_connectivity(mesh.topology.dim - 1, mesh.topology.dim)
 ds_all = ufl.Measure("ds", domain=mesh)
 x      = ufl.SpatialCoordinate(mesh)
 
-# Exact solution (UFL symbolic) 
 u_exact_ufl = x[0]**2 - x[1]**2
+n           = ufl.FacetNormal(mesh)
+g           = ufl.dot(ufl.grad(u_exact_ufl), n)
 
-# g = grad(u_exact).n — symbolic, over full boundary (Marcelo's approach)
-n = ufl.FacetNormal(mesh)
-g = ufl.dot(ufl.grad(u_exact_ufl), n)
-
-# subtract c from u_exact BEFORE solving
-print("\nStep 4 — computing c before solving...")
+# subtract c from u_exact before solving
 integral_u = comm.allreduce(
     dolfinx.fem.assemble_scalar(dolfinx.fem.form(u_exact_ufl * ds_all)), op=MPI.SUM
 )
@@ -61,24 +55,18 @@ area = comm.allreduce(
     dolfinx.fem.assemble_scalar(dolfinx.fem.form(
         dolfinx.fem.Constant(mesh, PETSc.ScalarType(1.0)) * ds_all)), op=MPI.SUM
 )
-c_val          = integral_u / area
-c_const        = dolfinx.fem.Constant(mesh, PETSc.ScalarType(c_val))
-u_exact_c_ufl  = u_exact_ufl - c_const
+c_val         = integral_u / area
+c_const       = dolfinx.fem.Constant(mesh, PETSc.ScalarType(c_val))
+u_exact_c_ufl = u_exact_ufl - c_const
 
-nova_integral = comm.allreduce(
-    dolfinx.fem.assemble_scalar(dolfinx.fem.form(u_exact_c_ufl * ds_all)), op=MPI.SUM
-)
-print(f"  integral(u_exact) ds = {integral_u:.5e}")
-print(f"  c = {c_val:.5e}")
-print(f"  integral(u-c) ds     = {nova_integral:.5e}  (~ 0 expected)")
+print(f"c = {c_val:.5e}  ->  int(u-c) ds = "
+      f"{comm.allreduce(dolfinx.fem.assemble_scalar(dolfinx.fem.form(u_exact_c_ufl * ds_all)), op=MPI.SUM):.2e}")
 
 u_exact_fn = dolfinx.fem.Function(V)
 u_exact_fn.interpolate(lambda xp: xp[0]**2 - xp[1]**2 - c_val)
 u_exact_fn.x.scatter_forward()
 
 # solve forward problem
-print("\nsolving forward problem...")
-
 u_t = ufl.TrialFunction(V)
 v_t = ufl.TestFunction(V)
 a   = ufl.inner(gamma * ufl.grad(u_t), ufl.grad(v_t)) * ufl.dx
@@ -108,11 +96,10 @@ ksp.setFromOptions()
 u_h = dolfinx.fem.Function(V)
 ksp.solve(b, u_h.x.petsc_vec)
 u_h.x.scatter_forward()
-print(f"  Converged in {ksp.getIterationNumber()} iterations")
+print(f"converged in {ksp.getIterationNumber()} iterations")
 A.destroy(); b.destroy(); ns_vec.destroy(); ksp.destroy()
 
 # compare u_h with u_exact
-print("\ncomparing u_h with u_exact...")
 diff    = u_h - u_exact_fn
 norm_L2 = np.sqrt(comm.allreduce(dolfinx.fem.assemble_scalar(
     dolfinx.fem.form(ufl.inner(u_exact_fn, u_exact_fn) * ufl.dx)), op=MPI.SUM))
@@ -127,29 +114,20 @@ u_err = dolfinx.fem.Function(V)
 u_err.x.array[:] = np.abs(u_h.x.array - u_exact_fn.x.array)
 err_max = float(u_err.x.array.max())
 
-print(f"  L2 relative error: {erro_L2/norm_L2*100:.4f}%")
-print(f"  H1 relative error: {erro_H1/norm_H1*100:.4f}%")
-print(f"  Max pointwise error: {err_max:.2e}")
-
-# flux error over full boundary
-print("\nchecking flux grad(u_h).n vs g...")
+# flux error
 flux_num  = ufl.dot(ufl.grad(u_h), n)
 norm_flux = comm.allreduce(dolfinx.fem.assemble_scalar(
     dolfinx.fem.form(g**2 * ds_all)), op=MPI.SUM)
 erro_flux = np.sqrt(comm.allreduce(dolfinx.fem.assemble_scalar(
     dolfinx.fem.form((flux_num - g)**2 * ds_all)), op=MPI.SUM))
-print(f"  Flux relative error: {erro_flux/np.sqrt(norm_flux)*100:.4f}%  (threshold: 5%)")
 
-# Renders
-print("\nRendering...")
+# Render
 BG    = "#1e1e2e"
 topo, ct, geo = dolfinx.plot.vtk_mesh(V)
 
-grids = {
-    "u_exact": u_exact_fn.x.array.real,
-    "u_h"    : u_h.x.array.real,
-    "erro"   : u_err.x.array.real,
-}
+grids  = {"u_exact": u_exact_fn.x.array.real,
+            "u_h"    : u_h.x.array.real,
+            "erro"   : u_err.x.array.real}
 clim_u   = [float(min(u_exact_fn.x.array.min(), u_h.x.array.min())),
             float(max(u_exact_fn.x.array.max(), u_h.x.array.max()))]
 clim_err = [0.0, float(u_err.x.array.max())]
@@ -171,9 +149,9 @@ for name, values in grids.items():
     tmps.append(tmp)
 
 imgs   = [np.array(Image.open(t)) for t in tmps]
-titles = ["Exact solution  u = x²−y²−c",
+titles = ["Exact solution  u = x^2 - y^2 - c",
             "Numerical solution  u_h",
-            "Pointwise error  |u_h − u_exact|"]
+            "Pointwise error  |u_h - u_exact|"]
 
 fig = plt.figure(figsize=(22, 8), facecolor=BG)
 gs  = gridspec.GridSpec(1, 3, figure=fig, hspace=0.01, wspace=0.03,
@@ -188,18 +166,14 @@ plt.savefig(str(out), dpi=150, bbox_inches="tight", facecolor=BG)
 plt.close()
 for t in tmps: t.unlink()
 
-# Summary
+# Results
 passed = (erro_L2/norm_L2 < 1e-2 and erro_flux/np.sqrt(norm_flux) < 5e-2)
-print("\n" + "=" * 52)
-print("CONSISTENCY TEST SUMMARY")
-print("=" * 52)
-print(f"Exact solution:    u = x^2 - y^2 - c  (c={c_val:.2e})")
-print(f"c before solve:    {c_val:.5e}")
-print(f"int(u_h) ds:       {nova_integral:.5e}")
-print(f"L2 relative error: {erro_L2/norm_L2*100:.4f}%")
-print(f"H1 relative error: {erro_H1/norm_H1*100:.4f}%")
-print(f"Flux relative error: {erro_flux/np.sqrt(norm_flux)*100:.4f}%")
-print()
-print("TEST PASSED" if passed else "TEST FAILED")
-print("=" * 52)
-print(f"Saved: {out}")
+
+print("\nResults:")
+print(f"  exact solution:  u = x^2 - y^2 - c  (c={c_val:.2e})")
+print(f"  L2 error:        {erro_L2/norm_L2*100:.4f}%")
+print(f"  H1 error:        {erro_H1/norm_H1*100:.4f}%")
+print(f"  max error:       {err_max:.2e}")
+print(f"  flux error:      {erro_flux/np.sqrt(norm_flux)*100:.4f}%")
+print(f"  result:          {'passed' if passed else 'failed'}")
+print(f"  saved:           {out}")

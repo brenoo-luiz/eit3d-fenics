@@ -1,13 +1,16 @@
 """
-Configuração centralizada do projeto EIT 3D.
-Todos os parâmetros físicos, geométricos e numéricos estão aqui.
+Centralized configuration for the EIT 3D project.
+All physical, geometric and numerical parameters are defined here.
 """
 
 from __future__ import annotations
+
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Tuple
+
 import numpy as np
+
 
 ROOT_DIR    = Path(__file__).parent.parent
 CACHE_DIR   = ROOT_DIR / "cache"
@@ -129,20 +132,13 @@ class EITConfig:
 
     def summary(self) -> str:
         return "\n".join([
-            "=" * 52,
-            "EIT 3D CONFIGURATION",
-            "=" * 52,
-            f"Mesh:          radius={self.mesh.radius}  height={self.mesh.height}"
+            f"mesh:         radius={self.mesh.radius}  height={self.mesh.height}"
             f"  h=[{self.mesh.size_min}, {self.mesh.size_max}]",
-            f"Conductivity:  gamma in [{self.conductivity.gamma_min},"
-            f"{self.conductivity.gamma_max}]"
-            f"  sphere r={self.conductivity.radius}",
-            f"Eta:           {len(self.eta.centers)} sphere(s)"
-            f"  r={self.eta.radius}  eta_in={self.eta.eta_in}",
-            f"Current:       {len(self.current.patterns)} pattern(s)",
-            f"Solver:        CG+HYPRE  rtol={self.solver.rtol}"
+            f"conductivity: gamma in [{self.conductivity.gamma_min}, "
+            f"{self.conductivity.gamma_max}]  sphere r={self.conductivity.radius}",
+            f"eta:          {len(self.eta.centers)} sphere(s)  r={self.eta.radius}",
+            f"current:      {len(self.current.patterns)} pattern(s)",
+            f"solver:       CG+HYPRE  rtol={self.solver.rtol}"
             f"  max_it={self.solver.max_it}",
-            f"Consistency:   {self.consistency.n_iter} iter"
-            f"  base={self.consistency.base}",
-            "=" * 52,
+            f"consistency:  {self.consistency.n_iter} iter  base={self.consistency.base}",
         ])

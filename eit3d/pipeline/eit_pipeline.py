@@ -1,9 +1,5 @@
 """
 Main orchestrator for the EIT 3D project.
-
-Coordinates mesh, fields and solvers through a single simple interface.
-Cache strategy: only mesh saved to disk (gamma and solution always
-recomputed to avoid DOF inconsistency on XDMF reload).
 """
 
 from __future__ import annotations
@@ -31,15 +27,9 @@ class EITPipeline:
     Main orchestrator for the EIT 3D project.
 
     Cache strategy:
-        Mesh     -> saved to disk (generation takes ~90s)
-        Gamma/Eta -> always recomputed (~1s) — avoids DOF errors
-        Solution  -> always solved    (~10s) — avoids DOF errors
-
-    Examples
-    --------
-    >>> pipe  = EITPipeline(EITConfig())
-    >>> u_h   = pipe.solve_forward(pattern=0)
-    >>> omega = pipe.solve_derivative(u_gamma=u_h)
+        Mesh     -> saved to disk (~90s generation)
+        Gamma/Eta -> always recomputed (~1s)
+        Solution  -> always solved    (~10s)
     """
 
     def __init__(
@@ -60,7 +50,6 @@ class EITPipeline:
         self._force_mesh = force_mesh
 
     def get_mesh(self) -> Tuple[dolfinx.mesh.Mesh, dolfinx.mesh.MeshTags]:
-        """Return (mesh, facet_tags), loading from cache if available."""
         if self._mesh is None:
             cylinder = CylinderMesh(
                 config=self._config.mesh,
@@ -72,7 +61,6 @@ class EITPipeline:
         return self._mesh, self._facet_tags
 
     def get_function_space(self) -> dolfinx.fem.FunctionSpace:
-        """Return the P2 Lagrange function space."""
         if self._V is None:
             mesh, _ = self.get_mesh()
             el      = basix.ufl.element("Lagrange", "tetrahedron", degree=2, shape=())
@@ -81,12 +69,10 @@ class EITPipeline:
         return self._V
 
     def build_gamma(self) -> dolfinx.fem.Function:
-        """Build and return the conductivity field gamma (DG0)."""
         mesh, _ = self.get_mesh()
         return ConductivityField(mesh, self._config.conductivity).build()
 
     def build_eta(self) -> dolfinx.fem.Function:
-        """Build and return the directional field eta (DG0)."""
         mesh, _ = self.get_mesh()
         return DirectionalField(mesh, self._config.eta).build()
 
@@ -95,21 +81,6 @@ class EITPipeline:
         pattern: int                            = 0,
         gamma  : Optional[dolfinx.fem.Function] = None,
     ) -> dolfinx.fem.Function:
-        """
-        Solve the EIT forward problem for a current pattern.
-
-        Parameters
-        ----------
-        pattern : int
-            Index in config.current.patterns.
-        gamma : dolfinx.fem.Function, optional
-            Conductivity field. Built from config if None.
-
-        Returns
-        -------
-        dolfinx.fem.Function
-            Electric potential u_gamma in H^1_diamond(Omega).
-        """
         if gamma is None:
             gamma = self.build_gamma()
 
@@ -129,23 +100,6 @@ class EITPipeline:
         gamma  : Optional[dolfinx.fem.Function] = None,
         eta    : Optional[dolfinx.fem.Function] = None,
     ) -> dolfinx.fem.Function:
-        """
-        Solve eq. (1.13) for the directional derivative omega.
-
-        Parameters
-        ----------
-        u_gamma : dolfinx.fem.Function
-            Forward solution (used entire in Omega, not just on boundary).
-        gamma : dolfinx.fem.Function, optional
-            Conductivity field. Built from config if None.
-        eta : dolfinx.fem.Function, optional
-            Directional field. Built from config if None.
-
-        Returns
-        -------
-        dolfinx.fem.Function
-            omega such that F'(gamma)eta = omega|_{dOmega}.
-        """
         if gamma is None:
             gamma = self.build_gamma()
         if eta is None:
@@ -161,9 +115,8 @@ class EITPipeline:
         ).solve()
 
     def status(self) -> str:
-        """Return a summary of the pipeline state and cache."""
-        return "\n".join([
+        lines = [
             self._config.summary(),
-            f"Mesh cache: {'available' if MESH_FILE.exists() else 'not generated'}",
-            "Gamma/Eta/Solution: always recomputed (DOF safety)",
-        ])
+            f"mesh cache:   {'available' if MESH_FILE.exists() else 'not generated'}",
+        ]
+        return "\n".join(lines)
