@@ -1,6 +1,4 @@
-"""
-Compute directional derivative F'(gamma)eta and consistency test.
-"""
+"""scripts/step3_derivative.py — directional derivative F'(gamma)eta and consistency test."""
 
 import logging
 import sys
@@ -28,15 +26,11 @@ cfg  = EITConfig(consistency=ConsistencyTestConfig(n_iter=150, base=0.9))
 pipe = EITPipeline(cfg)
 print(pipe.status())
 
-# Fields
 gamma = pipe.build_gamma()
 eta   = pipe.build_eta()
 
-# Forward problem — u_gamma
 u_gamma = pipe.solve_forward(pattern=0, gamma=gamma)
-
-# Directional derivative — omega
-omega = pipe.solve_derivative(u_gamma=u_gamma, gamma=gamma, eta=eta)
+omega   = pipe.solve_derivative(u_gamma=u_gamma, gamma=gamma, eta=eta)
 
 mesh, facet_tags = pipe.get_mesh()
 ds_all = ufl.Measure("ds", domain=mesh)
@@ -60,11 +54,11 @@ norm_omega_bnd = np.sqrt(comm.allreduce(
     dolfinx.fem.assemble_scalar(dolfinx.fem.form(omega**2 * ds_all)), op=MPI.SUM
 ))
 
-print(f"int(omega) ds:  {integral_omega_before:.2e} -> {integral_omega:.2e}  (c={c_omega:.2e})")
-print(f"||omega||:      {norm_omega_bnd:.4e}")
+print(f"int(omega): {integral_omega_before:.2e} -> {integral_omega:.2e}  (c={c_omega:.2e})")
+print(f"||omega||:  {norm_omega_bnd:.4e}")
 
-# Consistency test 
-print(f"\nConsistency test ({cfg.consistency.n_iter} iterations)")
+# Consistency test
+print(f"\nconsistency test ({cfg.consistency.n_iter} iterations)")
 
 V0      = dolfinx.fem.functionspace(mesh, ("DG", 0))
 V       = pipe.get_function_space()
@@ -100,15 +94,15 @@ y_vals  = np.array(y_vals)
 idx_min = int(np.argmin(y_vals))
 log_t   = np.log10(t_vals)
 log_y   = np.log10(y_vals)
-coeffs  = np.polyfit(
-    log_t[:idx_min] if idx_min > 5 else log_t,
-    log_y[:idx_min] if idx_min > 5 else log_y, 1
-)
+
+# Fit only on the initial linear descent (avoids plateau distorting the slope)
+n_fit    = min(30, idx_min)
+coeffs   = np.polyfit(log_t[:n_fit], log_y[:n_fit], 1)
 taxa     = coeffs[0]
-fit_line = np.polyval(coeffs, log_t[:idx_min] if idx_min > 5 else log_t)
+fit_line = np.polyval(coeffs, log_t[:n_fit])
 
 # Render
-print("\nRendering...")
+print("\nrendering...")
 renderer = StaticRenderer(OUTPUTS_DIR)
 
 renderer.render_geometry(
@@ -130,10 +124,10 @@ renderer.render_omega(grid_om, "omega", integral_omega)
 
 renderer.render_consistency(y_vals, t_vals, taxa, fit_line, idx_min)
 
-# Summary
-print("\nResults:")
-print(f"  u_gamma:      [{u_gamma.x.array.min():.4f}, {u_gamma.x.array.max():.4f}]")
-print(f"  omega:        [{omega.x.array.min():.4f}, {omega.x.array.max():.4f}]")
-print(f"  int(omega):   {integral_omega:.2e}")
-print(f"  y_min:        {y_vals[idx_min]:.4e}  (n={idx_min})")
+# Results
+print("\nresults:")
+print(f"  u_gamma:       [{u_gamma.x.array.min():.4f}, {u_gamma.x.array.max():.4f}]")
+print(f"  omega:         [{omega.x.array.min():.4f}, {omega.x.array.max():.4f}]")
+print(f"  int(omega):    {integral_omega:.2e}")
+print(f"  y_min:         {y_vals[idx_min]:.4e}  (n={idx_min})")
 print(f"  log-log slope: {taxa:.3f}  (expected: 1.0)")
