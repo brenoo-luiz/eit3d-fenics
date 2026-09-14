@@ -1,0 +1,9 @@
+cache/
+outputs/
+__pycache__/
+*.py[cod]
+*.so
+.env
+.vscode/settings.json
+.DS_Store
+*.log
