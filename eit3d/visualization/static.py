@@ -1,15 +1,10 @@
-"""
-Static PNG renderer for EIT 3D results.
-"""
+"""Static PNG renderer for EIT 3D results."""
 
 from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Optional
 
-import dolfinx.plot
-import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
 import numpy as np
 import pyvista
@@ -22,21 +17,11 @@ logger = logging.getLogger(__name__)
 
 
 class StaticRenderer(BaseRenderer):
-    """
-    Renders EIT 3D results as static PNG files using PyVista + Matplotlib.
-
-    Produces 4 output files:
-        step3_a_geometria.png   — gamma and eta geometries
-        step3_b_forward.png     — u_gamma (surface + cross-section)
-        step3_c_omega.png       — omega (surface + cross-section)
-        step3_d_consistencia.png— consistency test plots
-    """
 
     def __init__(self, output_dir: Path = OUTPUTS_DIR) -> None:
         super().__init__(output_dir)
 
     def render(self, **kwargs) -> None:
-        """Entry point — delegates to specific render methods."""
         raise NotImplementedError("Call render_geometry, render_forward, etc. directly.")
 
     def render_geometry(
@@ -47,7 +32,6 @@ class StaticRenderer(BaseRenderer):
         eta_radius   : float,
         filename     : str = "step3_a_geometria.png",
     ) -> Path:
-        """Render gamma and eta geometries side by side."""
         cyl = pyvista.Cylinder(
             center=(0, 0, 0), direction=(0, 0, 1),
             radius=1.0, height=2.0, resolution=100, capping=True,
@@ -59,7 +43,7 @@ class StaticRenderer(BaseRenderer):
         )
         spheres_eta = [
             pyvista.Sphere(radius=eta_radius, center=c.tolist(),
-                        theta_resolution=60, phi_resolution=60)
+                            theta_resolution=60, phi_resolution=60)
             for c in eta_centers
         ]
 
@@ -98,7 +82,6 @@ class StaticRenderer(BaseRenderer):
         sphere_radius: float,
         filename     : str = "step3_b_forward.png",
     ) -> Path:
-        """Render u_gamma — surface and cross-section."""
         clim = [float(grid[scalar].min()), float(grid[scalar].max())]
         surf = grid.extract_surface(algorithm="dataset_surface")
         clip = grid.clip(normal="x", origin=(0, 0, 0))
@@ -156,7 +139,6 @@ class StaticRenderer(BaseRenderer):
         integral: float,
         filename: str = "step3_c_omega.png",
     ) -> Path:
-        """Render omega — surface and cross-section at y=0."""
         clim = [float(grid[scalar].min()), float(grid[scalar].max())]
         surf = grid.extract_surface(algorithm="dataset_surface")
         clip = grid.clip(normal="y", origin=(0, 0, 0))
@@ -208,11 +190,10 @@ class StaticRenderer(BaseRenderer):
         idx_min : int,
         filename: str = "step3_d_consistencia.png",
     ) -> Path:
-        """Render consistency test: semilogy + log-log convergence rate."""
-        ns      = np.arange(len(y_vals))
-        log_t   = np.log10(t_vals)
-        log_y   = np.log10(y_vals)
-        ref_y   = log_t - log_t[0] + log_y[0]
+        ns    = np.arange(len(y_vals))
+        log_t = np.log10(t_vals)
+        log_y = np.log10(y_vals)
+        ref_y = log_t - log_t[0] + log_y[0]
 
         fig, axes = plt.subplots(1, 2, figsize=(18, 7), facecolor=self.BG)
 
@@ -243,12 +224,12 @@ class StaticRenderer(BaseRenderer):
             arrowprops=dict(arrowstyle="->", color="#ffcc44"),
         )
 
-        # log-log 
+        # log-log
         ax2 = axes[1]
         ax2.set_facecolor(self.BG)
         ax2.plot(log_t, log_y, "o", color="#44aaff", markersize=5,
                 markerfacecolor="white", label=r"$\log y_n$ vs $\log t_n$")
-        ax2.plot(log_t[:idx_min] if idx_min > 5 else log_t, fit_line,
+        ax2.plot(log_t[:len(fit_line)], fit_line,
                 "--", color="#ff7744", linewidth=2,
                 label=f"linear fit (slope ≈ {taxa:.2f})")
         ax2.plot(log_t, ref_y, ":", color="#aaaaaa", linewidth=1.5,
@@ -267,8 +248,8 @@ class StaticRenderer(BaseRenderer):
         ax2.grid(True, color="#4a4a6a", linestyle="--", alpha=0.4)
         ax2.annotate(
             f"estimated rate: {taxa:.3f}",
-            xy=(log_t[5], fit_line[5] if idx_min > 5 else log_y[5]),
-            xytext=(log_t[5] + 0.05, (fit_line[5] if idx_min > 5 else log_y[5]) + 0.2),
+            xy=(log_t[len(fit_line) - 1], fit_line[-1]),
+            xytext=(log_t[len(fit_line) - 1] + 0.05, fit_line[-1] + 0.2),
             color="#ff7744", fontsize=11,
             arrowprops=dict(arrowstyle="->", color="#ff7744"),
         )
@@ -281,7 +262,6 @@ class StaticRenderer(BaseRenderer):
         return out
 
     def _compose_2panel(self, imgs_titles: list, titles: list, filename: str) -> Path:
-        """Compose two images side by side with matplotlib."""
         fig, axes = plt.subplots(1, 2, figsize=(16, 8), facecolor=self.BG)
         for ax, (img, _), title in zip(axes, imgs_titles, titles):
             ax.imshow(img)
