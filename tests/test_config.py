@@ -1,6 +1,4 @@
 """
-tests/test_config.py
-=====================
 Unit tests for EITConfig dataclasses.
 """
 

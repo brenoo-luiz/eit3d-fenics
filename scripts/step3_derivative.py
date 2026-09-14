@@ -1,6 +1,4 @@
 """
-scripts/step3_derivative.py
-============================
 Compute directional derivative F'(gamma)eta and consistency test.
 """
 
@@ -30,14 +28,14 @@ cfg  = EITConfig()
 pipe = EITPipeline(cfg)
 print(pipe.status())
 
-# ── Fields ────────────────────────────────────────────────────────────────────
+# Fields
 gamma = pipe.build_gamma()
 eta   = pipe.build_eta()
 
-# ── Forward problem — u_gamma ─────────────────────────────────────────────────
+# Forward problem — u_gamma
 u_gamma = pipe.solve_forward(pattern=0, gamma=gamma)
 
-# ── Directional derivative — omega ────────────────────────────────────────────
+# Directional derivative — omega
 omega = pipe.solve_derivative(u_gamma=u_gamma, gamma=gamma, eta=eta)
 
 mesh, facet_tags = pipe.get_mesh()
@@ -52,7 +50,7 @@ norm_omega_bnd = np.sqrt(comm.allreduce(
 print(f"int(omega) ds = {integral_omega:.2e}  (~ 0 expected)")
 print(f"||omega||_L2(dOmega) = {norm_omega_bnd:.4e}")
 
-# ── Consistency test ──────────────────────────────────────────────────────────
+# Consistency test
 print(f"\nConsistency test ({cfg.consistency.n_iter} iterations)...")
 
 V0      = dolfinx.fem.functionspace(mesh, ("DG", 0))
@@ -90,11 +88,11 @@ idx_min = int(np.argmin(y_vals))
 log_t   = np.log10(t_vals)
 log_y   = np.log10(y_vals)
 coeffs  = np.polyfit(log_t[:idx_min] if idx_min > 5 else log_t,
-                     log_y[:idx_min] if idx_min > 5 else log_y, 1)
+                    log_y[:idx_min] if idx_min > 5 else log_y, 1)
 taxa     = coeffs[0]
 fit_line = np.polyval(coeffs, log_t[:idx_min] if idx_min > 5 else log_t)
 
-# ── Visualize ─────────────────────────────────────────────────────────────────
+# Visualize 
 renderer = StaticRenderer(OUTPUTS_DIR)
 
 renderer.render_geometry(
@@ -116,7 +114,7 @@ renderer.render_omega(grid_om, "omega", integral_omega)
 
 renderer.render_consistency(y_vals, t_vals, taxa, fit_line, idx_min)
 
-# ── Summary ───────────────────────────────────────────────────────────────────
+# Summary
 print("\n" + "=" * 52)
 print("SUMMARY — DIRECTIONAL DERIVATIVE")
 print("=" * 52)

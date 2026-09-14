@@ -1,6 +1,4 @@
 """
-scripts/step1_mesh.py
-======================
 Generate and cache the cylinder mesh.
 """
 

@@ -1,6 +1,4 @@
 """
-eit3d/fields/conductivity.py
-=============================
 Conductivity field gamma and directional field eta (DG0).
 """
 

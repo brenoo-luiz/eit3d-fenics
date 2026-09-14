@@ -1,6 +1,4 @@
 """
-scripts/step2_forward.py
-=========================
 Solve and visualize the EIT 3D forward problem.
 """
 
@@ -26,7 +24,7 @@ cfg  = EITConfig()
 pipe = EITPipeline(cfg)
 print(pipe.status())
 
-# ── Solve ─────────────────────────────────────────────────────────────────────
+# Solve 
 gamma = pipe.build_gamma()
 u_h   = pipe.solve_forward(pattern=0, gamma=gamma)
 
@@ -35,7 +33,7 @@ u_max = float(u_h.x.array.max())
 clim  = [u_min, u_max]
 print(f"u in [{u_min:.4f}, {u_max:.4f}]")
 
-# ── PyVista grids ─────────────────────────────────────────────────────────────
+# PyVista grids
 V = pipe.get_function_space()
 topo, ct, geo = dolfinx.plot.vtk_mesh(V)
 
@@ -65,10 +63,10 @@ cyl = pyvista.Cylinder(
 
 BG    = "#1e1e2e"
 sargs = dict(title="u", title_font_size=20, label_font_size=15,
-             color="white", position_x=0.03, position_y=0.03,
-             width=0.42, height=0.06)
+            color="white", position_x=0.03, position_y=0.03,
+            width=0.42, height=0.06)
 
-# ── Renders ───────────────────────────────────────────────────────────────────
+# Renders
 tmps = []
 
 for name, setup in [
@@ -80,14 +78,14 @@ for name, setup in [
     ]),
     ("_tmp_u.png", lambda p: [
         p.add_mesh(surf, scalars="u", cmap="turbo", clim=clim,
-                   show_edges=False, lighting=True, smooth_shading=True,
-                   show_scalar_bar=True, scalar_bar_args=sargs),
+                    show_edges=False, lighting=True, smooth_shading=True,
+                    show_scalar_bar=True, scalar_bar_args=sargs),
         p.view_isometric(),
     ]),
     ("_tmp_clip.png", lambda p: [
         p.add_mesh(clip, scalars="u", cmap="turbo", clim=clim,
-                   show_edges=False, lighting=True, smooth_shading=True,
-                   show_scalar_bar=False),
+                    show_edges=False, lighting=True, smooth_shading=True,
+                    show_scalar_bar=False),
         p.add_mesh(circle, color="white", line_width=3),
         setattr(p, "camera_position", [(5, 0, 0), (0, 0, 0), (0, 0, 1)]),
         p.camera.zoom(1.4),
@@ -101,7 +99,7 @@ for name, setup in [
     p.close()
     tmps.append(path)
 
-# ── Compose ───────────────────────────────────────────────────────────────────
+# Compose
 imgs   = [np.array(Image.open(t)) for t in tmps]
 titles = [
     "Conductivity γ (sphere inclusion)",

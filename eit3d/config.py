@@ -1,6 +1,4 @@
 """
-eit3d/config.py
-================
 Configuração centralizada do projeto EIT 3D.
 Todos os parâmetros físicos, geométricos e numéricos estão aqui.
 """
