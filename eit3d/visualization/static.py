@@ -64,7 +64,7 @@ class StaticRenderer(BaseRenderer):
         ]
 
         imgs = []
-        for meshes, colors, label in [
+        for meshes, label in [
             ([(cyl, "#1a3a6a", 0.35), (sphere_gam, "#cc3333", 0.95)],
             "gamma = 2 (sphere)  /  gamma = 1 (background)"),
             ([(cyl, "#1a3a6a", 0.35)] + [(s, "#33aa33", 0.95) for s in spheres_eta],
