@@ -6,10 +6,9 @@ from typing import Optional, Tuple
 import basix
 import dolfinx
 import dolfinx.fem
-import ufl
 from mpi4py import MPI
 
-from eit3d.config import CACHE_DIR, OUTPUTS_DIR, EITConfig
+from eit3d.config import OUTPUTS_DIR, EITConfig
 from eit3d.fields.conductivity import ConductivityField, DirectionalField
 from eit3d.mesh.cylinder import CylinderMesh
 from eit3d.solvers.derivative import DerivativeSolver
@@ -19,7 +18,15 @@ logger = logging.getLogger(__name__)
 
 
 class EITPipeline:
-    """ Main orchestrator for the EIT 3D project """
+    """
+    Main orchestrator for the EIT 3D project.
+
+    Cache strategy:
+        Mesh      -> saved to disk, filename derived from config hash
+                    (changing any mesh parameter triggers regeneration)
+        Gamma/Eta -> always recomputed (~1s)
+        Solution  -> always solved    (~10s)
+    """
 
     def __init__(
         self,
@@ -30,23 +37,21 @@ class EITPipeline:
         self._config = config
         self._comm   = comm
 
-        CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        # Cheap: only computes the cache path, the mesh is built lazily in get().
+        self._cylinder = CylinderMesh(
+            config=config.mesh,
+            comm=comm,
+            force=force_mesh,
+        )
         OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)
 
-        self._cylinder   : Optional[CylinderMesh]              = None
         self._mesh       : Optional[dolfinx.mesh.Mesh]         = None
         self._facet_tags : Optional[dolfinx.mesh.MeshTags]     = None
-        self._V          : Optional[dolfinx.fem.FunctionSpace]  = None
-        self._force_mesh = force_mesh
+        self._V          : Optional[dolfinx.fem.FunctionSpace] = None
 
     def get_mesh(self) -> Tuple[dolfinx.mesh.Mesh, dolfinx.mesh.MeshTags]:
-        """Return (mesh, facet_tags). Cache filename is hash of MeshConfig."""
+        """Return (mesh, facet_tags), loading or generating on first call."""
         if self._mesh is None:
-            self._cylinder = CylinderMesh(
-                config=self._config.mesh,
-                comm=self._comm,
-                force=self._force_mesh,
-            )
             self._mesh, self._facet_tags = self._cylinder.get()
         return self._mesh, self._facet_tags
 
@@ -88,7 +93,8 @@ class EITPipeline:
             mesh=mesh, facet_tags=facet_tags,
             V=V, gamma=gamma,
             config=self._config.solver, comm=self._comm,
-        ).solve(g_top=g_top, g_bot=g_bot)
+            g_top=g_top, g_bot=g_bot,
+        ).solve()
 
     def solve_derivative(
         self,
@@ -102,23 +108,19 @@ class EITPipeline:
         if eta is None:
             eta = self.build_eta()
 
-        self.get_mesh()
-        V = self.get_function_space()
+        mesh, _ = self.get_mesh()
+        V       = self.get_function_space()
 
         return DerivativeSolver(
-            mesh=self._mesh, V=V,
+            mesh=mesh, V=V,
             gamma=gamma, eta=eta, u_gamma=u_gamma,
             config=self._config.solver, comm=self._comm,
         ).solve()
 
     def status(self) -> str:
-        """Return a summary of the pipeline state and cache."""
-        from eit3d.mesh.cylinder import _mesh_cache_path
-        mesh_file = _mesh_cache_path(self._config.mesh)
-        lines = [
+        """Return a summary of the configuration and mesh cache state."""
+        state = "available" if self._cylinder.is_cached() else "not generated"
+        return "\n".join([
             self._config.summary(),
-            f"mesh cache:   "
-            f"{'available' if mesh_file.exists() else 'not generated'}"
-            f"  ({mesh_file.name})",
-        ]
-        return "\n".join(lines)
+            f"mesh cache:   {state}  ({self._cylinder.mesh_file.name})",
+        ])

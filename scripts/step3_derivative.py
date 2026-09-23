@@ -1,5 +1,3 @@
-"""scripts/step3_derivative.py — directional derivative F'(gamma)eta and consistency test."""
-
 import logging
 import sys
 from pathlib import Path
@@ -7,12 +5,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import dolfinx.plot
-import dolfinx.fem.petsc
 import ufl
 import numpy as np
 import pyvista
 from mpi4py import MPI
-from petsc4py import PETSc
 
 from eit3d import EITConfig, EITPipeline
 from eit3d.config import OUTPUTS_DIR, ConsistencyTestConfig
@@ -35,18 +31,8 @@ omega   = pipe.solve_derivative(u_gamma=u_gamma, gamma=gamma, eta=eta)
 mesh, facet_tags = pipe.get_mesh()
 ds_all = ufl.Measure("ds", domain=mesh)
 
-# Ensure int(omega) ds = 0
-integral_omega_before = comm.allreduce(
-    dolfinx.fem.assemble_scalar(dolfinx.fem.form(omega * ds_all)), op=MPI.SUM
-)
-area_total = comm.allreduce(
-    dolfinx.fem.assemble_scalar(dolfinx.fem.form(
-        dolfinx.fem.Constant(mesh, PETSc.ScalarType(1.0)) * ds_all)), op=MPI.SUM
-)
-c_omega = integral_omega_before / area_total
-omega.x.array[:] -= c_omega
-omega.x.scatter_forward()
-
+# The solvers already enforce int_dOmega u ds = 0 for u_gamma, u_n and omega,
+# so every function in the difference quotient uses the SAME normalization.
 integral_omega = comm.allreduce(
     dolfinx.fem.assemble_scalar(dolfinx.fem.form(omega * ds_all)), op=MPI.SUM
 )
@@ -54,7 +40,7 @@ norm_omega_bnd = np.sqrt(comm.allreduce(
     dolfinx.fem.assemble_scalar(dolfinx.fem.form(omega**2 * ds_all)), op=MPI.SUM
 ))
 
-print(f"int(omega): {integral_omega_before:.2e} -> {integral_omega:.2e}  (c={c_omega:.2e})")
+print(f"int(omega): {integral_omega:.2e}")
 print(f"||omega||:  {norm_omega_bnd:.4e}")
 
 # Consistency test
@@ -65,7 +51,11 @@ V       = pipe.get_function_space()
 gamma_n = dolfinx.fem.Function(V0)
 diff_fn = dolfinx.fem.Function(V)
 t_vals  = cfg.consistency.t_values()
-y_vals  = []
+y_vals  = np.empty(len(t_vals))
+g_top, g_bot = cfg.current.patterns[0]
+
+# Compiled once: diff_fn is updated in place, omega is fixed.
+err_form = dolfinx.fem.form((diff_fn - omega)**2 * ds_all)
 
 for k, t_n in enumerate(t_vals):
     gamma_n.x.array[:] = gamma.x.array + t_n * eta.x.array
@@ -74,29 +64,22 @@ for k, t_n in enumerate(t_vals):
     u_n = ForwardSolver(
         mesh=mesh, facet_tags=facet_tags, V=V,
         gamma=gamma_n, config=cfg.solver, comm=comm,
-    ).solve(
-        g_top=cfg.current.patterns[0][0],
-        g_bot=cfg.current.patterns[0][1],
-    )
+        g_top=g_top, g_bot=g_bot,
+    ).solve()
 
     diff_fn.x.array[:] = (u_n.x.array - u_gamma.x.array) / t_n
     diff_fn.x.scatter_forward()
 
-    err = diff_fn - omega
-    num = np.sqrt(comm.allreduce(
-        dolfinx.fem.assemble_scalar(dolfinx.fem.form(err**2 * ds_all)), op=MPI.SUM
-    ))
-    y_n = num / norm_omega_bnd
-    y_vals.append(y_n)
-    print(f"  n={k:3d}  t={t_n:.6f}  y={y_n:.4e}")
+    num = np.sqrt(comm.allreduce(dolfinx.fem.assemble_scalar(err_form), op=MPI.SUM))
+    y_vals[k] = num / norm_omega_bnd
+    print(f"  n={k:3d}  t={t_n:.6f}  y={y_vals[k]:.4e}")
 
-y_vals  = np.array(y_vals)
 idx_min = int(np.argmin(y_vals))
 log_t   = np.log10(t_vals)
 log_y   = np.log10(y_vals)
 
 # Fit only on the initial linear descent (avoids plateau distorting the slope)
-n_fit    = min(30, idx_min)
+n_fit    = max(2, min(30, idx_min))
 coeffs   = np.polyfit(log_t[:n_fit], log_y[:n_fit], 1)
 taxa     = coeffs[0]
 fit_line = np.polyval(coeffs, log_t[:n_fit])

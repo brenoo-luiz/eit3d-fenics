@@ -1,14 +1,8 @@
-"""
-Abstract base class for all EIT 3D solvers.
-
-Centralizes matrix assembly, null space and CG+HYPRE solver (DRY).
-Subclasses implement solve() following the Template Method pattern.
-"""
-
 from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
+from typing import Union
 
 import dolfinx
 import dolfinx.fem.petsc
@@ -20,72 +14,121 @@ from eit3d.config import SolverConfig
 
 logger = logging.getLogger(__name__)
 
+Coefficient = Union[dolfinx.fem.Function, dolfinx.fem.Constant]
+
 
 class BaseSolver(ABC):
-    """
-    Abstract interface for EIT 3D variational solvers.
 
-    Subclasses: ForwardSolver, DerivativeSolver.
-    """
 
     def __init__(
         self,
         mesh  : dolfinx.mesh.Mesh,
         V     : dolfinx.fem.FunctionSpace,
+        gamma : Coefficient,
         config: SolverConfig,
         comm  : MPI.Comm = MPI.COMM_WORLD,
     ) -> None:
         self._mesh   = mesh
         self._V      = V
+        self._gamma  = gamma
         self._config = config
         self._comm   = comm
+        self._ds_all = ufl.Measure("ds", domain=mesh)
+
+    # Template Method
+
+    def solve(self) -> dolfinx.fem.Function:
+        """Solve the variational problem and return the normalized solution."""
+        w = ufl.TrialFunction(self._V)
+        v = ufl.TestFunction(self._V)
+
+        a_form = dolfinx.fem.form(self._bilinear_form(w, v))
+        L_form = dolfinx.fem.form(self._linear_form(v))
+
+        u_h = self._assemble_and_solve(a_form, L_form)
+        self._normalize_boundary_mean(u_h)
+
+        logger.info(
+            "%s: solution in [%.4f, %.4f]",
+            type(self).__name__,
+            float(u_h.x.array.min()), float(u_h.x.array.max()),
+        )
+        return u_h
+
+    # Hooks
+    def _bilinear_form(self, w: ufl.Argument, v: ufl.Argument) -> ufl.Form:
+        """a(w, v) = int_Omega gamma grad(w).grad(v) dx (shared by all solvers)."""
+        return ufl.inner(self._gamma * ufl.grad(w), ufl.grad(v)) * ufl.dx
 
     @abstractmethod
-    def solve(self) -> dolfinx.fem.Function:
-        """Solve the variational system and return the solution."""
+    def _linear_form(self, v: ufl.Argument) -> ufl.Form:
+        """Right-hand side L(v). Implemented by each concrete solver."""
 
+    # Shared implementation
     def _assemble_and_solve(
         self,
-        a_form: ufl.Form,
-        L_form: ufl.Form,
+        a_form: dolfinx.fem.Form,
+        L_form: dolfinx.fem.Form,
     ) -> dolfinx.fem.Function:
-        """
-        Assemble A and b, remove null space, solve Au = b.
+        A = b = ns_vec = ns = ksp = None
+        try:
+            A = dolfinx.fem.petsc.assemble_matrix(a_form)
+            A.assemble()
 
-        Template Method: shared by all concrete solvers.
-        Null space = span{1} (constant functions) — enforces uniqueness
-        (integral of u on boundary = 0), equivalent to Lagrange multiplier.
-        Solver: CG + HYPRE AMG (efficient for elliptic problems).
-        """
-        A = dolfinx.fem.petsc.assemble_matrix(a_form)
-        A.assemble()
+            ns_vec = A.createVecLeft()
+            ns_vec.set(1.0)
+            ns_vec.normalize()
+            ns = PETSc.NullSpace().create(vectors=[ns_vec], comm=self._comm)
+            A.setNullSpace(ns)
+            A.setTransposeNullSpace(ns)
 
-        ns_vec = A.createVecLeft()
-        ns_vec.set(1.0)
-        ns_vec.normalize()
-        ns = PETSc.NullSpace().create(vectors=[ns_vec], comm=self._comm)
-        A.setNullSpace(ns)
-        A.setTransposeNullSpace(ns)
+            b = A.createVecRight()
+            with b.localForm() as loc_b:
+                loc_b.set(0.0)
+            dolfinx.fem.petsc.assemble_vector(b, L_form)
+            b.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
+            ns.remove(b)
 
-        b = A.createVecRight()
-        with b.localForm() as loc_b:
-            loc_b.set(0.0)
-        dolfinx.fem.petsc.assemble_vector(b, L_form)
-        b.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
-        ns.remove(b)
+            ksp = PETSc.KSP().create(self._comm)
+            ksp.setOperators(A)
+            ksp.setType(PETSc.KSP.Type.CG)
+            ksp.getPC().setType(PETSc.PC.Type.HYPRE)
+            ksp.setTolerances(
+                rtol=self._config.rtol,
+                atol=self._config.atol,
+                max_it=self._config.max_it,
+            )
+            ksp.setFromOptions()
 
-        ksp = PETSc.KSP().create(self._comm)
-        ksp.setOperators(A)
-        ksp.setType(PETSc.KSP.Type.CG)
-        ksp.getPC().setType(PETSc.PC.Type.HYPRE)
-        ksp.setTolerances(rtol=self._config.rtol, atol=self._config.atol, max_it=self._config.max_it)
-        ksp.setFromOptions()
+            u_h = dolfinx.fem.Function(self._V)
+            ksp.solve(b, u_h.x.petsc_vec)
+            u_h.x.scatter_forward()
 
-        u_h = dolfinx.fem.Function(self._V)
-        ksp.solve(b, u_h.x.petsc_vec)
+            reason = ksp.getConvergedReason()
+            if reason < 0:
+                raise RuntimeError(
+                    f"{type(self).__name__}: KSP diverged (reason={reason})"
+                )
+            logger.info(
+                "%s: converged in %d iterations",
+                type(self).__name__, ksp.getIterationNumber(),
+            )
+            return u_h
+        finally:
+            for obj in (ksp, ns, b, ns_vec, A):
+                if obj is not None:
+                    obj.destroy()
+
+    def _normalize_boundary_mean(self, u_h: dolfinx.fem.Function) -> None:
+        integral = self._comm.allreduce(
+            dolfinx.fem.assemble_scalar(dolfinx.fem.form(u_h * self._ds_all)),
+            op=MPI.SUM,
+        )
+        area = self._comm.allreduce(
+            dolfinx.fem.assemble_scalar(dolfinx.fem.form(
+                dolfinx.fem.Constant(self._mesh, PETSc.ScalarType(1.0)) * self._ds_all
+            )),
+            op=MPI.SUM,
+        )
+        u_h.x.array[:] -= integral / area
         u_h.x.scatter_forward()
-
-        logger.info("Solver converged in %d iterations", ksp.getIterationNumber())
-
-        A.destroy(); b.destroy(); ns_vec.destroy(); ksp.destroy()
-        return u_h

@@ -13,7 +13,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import dolfinx
-import dolfinx.fem.petsc
 import dolfinx.plot
 import ufl
 import numpy as np
@@ -26,6 +25,7 @@ from petsc4py import PETSc
 
 from eit3d import EITConfig, EITPipeline
 from eit3d.config import OUTPUTS_DIR
+from eit3d.solvers.neumann import NeumannSolver
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 
@@ -66,38 +66,12 @@ u_exact_fn = dolfinx.fem.Function(V)
 u_exact_fn.interpolate(lambda xp: xp[0]**2 - xp[1]**2 - c_val)
 u_exact_fn.x.scatter_forward()
 
-# solve forward problem
-u_t = ufl.TrialFunction(V)
-v_t = ufl.TestFunction(V)
-a   = ufl.inner(gamma * ufl.grad(u_t), ufl.grad(v_t)) * ufl.dx
-L   = g * v_t * ds_all
-
-A = dolfinx.fem.petsc.assemble_matrix(dolfinx.fem.form(a))
-A.assemble()
-
-ns_vec = A.createVecLeft()
-ns_vec.set(1.0); ns_vec.normalize()
-ns = PETSc.NullSpace().create(vectors=[ns_vec], comm=comm)
-A.setNullSpace(ns); A.setTransposeNullSpace(ns)
-
-b = A.createVecRight()
-with b.localForm() as lb: lb.set(0.0)
-dolfinx.fem.petsc.assemble_vector(b, dolfinx.fem.form(L))
-b.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
-ns.remove(b)
-
-ksp = PETSc.KSP().create(comm)
-ksp.setOperators(A)
-ksp.setType(PETSc.KSP.Type.CG)
-ksp.getPC().setType(PETSc.PC.Type.HYPRE)
-ksp.setTolerances(rtol=cfg.solver.rtol, atol=cfg.solver.atol, max_it=cfg.solver.max_it)
-ksp.setFromOptions()
-
-u_h = dolfinx.fem.Function(V)
-ksp.solve(b, u_h.x.petsc_vec)
-u_h.x.scatter_forward()
-print(f"converged in {ksp.getIterationNumber()} iterations")
-A.destroy(); b.destroy(); ns_vec.destroy(); ksp.destroy()
+# solve forward problem (the solver enforces int u_h ds = 0,
+# the same normalization used for u_exact above)
+u_h = NeumannSolver(
+    mesh=mesh, V=V, gamma=gamma, g=g,
+    config=cfg.solver, comm=comm,
+).solve()
 
 # compare u_h with u_exact
 diff    = u_h - u_exact_fn
