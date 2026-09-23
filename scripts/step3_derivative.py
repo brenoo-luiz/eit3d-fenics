@@ -83,31 +83,26 @@ log_y   = np.log10(y_vals)
 n_start  = min(40, max(0, idx_min - 2))
 n_end    = max(n_start + 2, idx_min - 15)
 coeffs   = np.polyfit(log_t[n_start:n_end], log_y[n_start:n_end], 1)
-taxa     = coeffs[0]
+slope    = coeffs[0]
 fit_line = np.polyval(coeffs, log_t[:n_end])
 
 # Render
 print("\nrendering...")
-renderer = StaticRenderer(OUTPUTS_DIR)
+renderer = StaticRenderer(cfg, OUTPUTS_DIR)
 
-renderer.render_geometry(
-    sphere_center=cfg.conductivity.center,
-    sphere_radius=cfg.conductivity.radius,
-    eta_centers=cfg.eta.centers,
-    eta_radius=cfg.eta.radius,
-)
+renderer.render_geometry()
 
 topo, ct, geo = dolfinx.plot.vtk_mesh(V)
 
 grid_ug            = pyvista.UnstructuredGrid(topo, ct, geo)
 grid_ug["u_gamma"] = u_gamma.x.array.real
-renderer.render_forward(grid_ug, "u_gamma", cfg.conductivity.radius)
+renderer.render_forward(grid_ug, "u_gamma")
 
 grid_om          = pyvista.UnstructuredGrid(topo, ct, geo)
 grid_om["omega"] = omega.x.array.real
 renderer.render_omega(grid_om, "omega", integral_omega)
 
-renderer.render_consistency(y_vals, t_vals, taxa, fit_line, idx_min)
+renderer.render_consistency(y_vals, t_vals, slope, fit_line, idx_min)
 
 # Results
 print("\nresults:")
@@ -115,4 +110,4 @@ print(f"  u_gamma:       [{u_gamma.x.array.min():.4f}, {u_gamma.x.array.max():.4
 print(f"  omega:         [{omega.x.array.min():.4f}, {omega.x.array.max():.4f}]")
 print(f"  int(omega):    {integral_omega:.2e}")
 print(f"  y_min:         {y_vals[idx_min]:.4e}  (n={idx_min})")
-print(f"  log-log slope: {taxa:.3f}  (expected: 1.0)")
+print(f"  log-log slope: {slope:.3f}  (expected: 1.0)")
