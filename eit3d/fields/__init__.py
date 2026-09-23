@@ -1,3 +1,7 @@
-from eit3d.fields.conductivity import ConductivityField, DirectionalField
+from eit3d.fields.conductivity import (
+    ConductivityField, DirectionalField, PiecewiseSphereField, sphere_indicator,
+)
 
-__all__ = ["ConductivityField", "DirectionalField"]
+__all__ = [
+    "PiecewiseSphereField", "ConductivityField", "DirectionalField", "sphere_indicator",
+]
