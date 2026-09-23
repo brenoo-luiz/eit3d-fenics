@@ -15,7 +15,6 @@ import numpy as np
 ROOT_DIR    = Path(__file__).parent.parent
 CACHE_DIR   = ROOT_DIR / "cache"
 OUTPUTS_DIR = ROOT_DIR / "outputs"
-MESH_FILE   = CACHE_DIR / "mesh.xdmf"
 
 TOP_TAG     = 1
 BOTTOM_TAG  = 2
@@ -31,6 +30,13 @@ class MeshConfig:
     size_min : float = 0.02
 
     def __post_init__(self) -> None:
+        # Coerce to float so that radius=1 and radius=1.0 hash identically
+        # (the mesh cache filename is derived from these values).
+        self.radius   = float(self.radius)
+        self.height   = float(self.height)
+        self.size_max = float(self.size_max)
+        self.size_min = float(self.size_min)
+
         if self.radius <= 0:
             raise ValueError(f"radius must be positive, got: {self.radius}")
         if self.height <= 0:
