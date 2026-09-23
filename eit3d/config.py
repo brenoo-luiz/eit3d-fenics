@@ -1,13 +1,19 @@
 """
 Centralized configuration for the EIT 3D project.
 All physical, geometric and numerical parameters are defined here.
+
+Every config is an immutable value object (frozen dataclass): invariants are
+validated once in __post_init__ and cannot be broken afterwards, e.g.
+`cfg.mesh.radius = -1` raises FrozenInstanceError. NumPy arrays are stored
+read-only and lists are stored as tuples for the same reason.
+To change a parameter, build a new object: dataclasses.replace(cfg, radius=2.0).
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Tuple
+from typing import Tuple
 
 import numpy as np
 
@@ -22,7 +28,14 @@ LATERAL_TAG = 3
 VOLUME_TAG  = 10
 
 
-@dataclass
+def _readonly_vector(value) -> np.ndarray:
+    """Return a float copy of `value` that cannot be modified in place."""
+    arr = np.array(value, dtype=float)
+    arr.setflags(write=False)
+    return arr
+
+
+@dataclass(frozen=True)
 class MeshConfig:
     radius   : float = 1.0
     height   : float = 2.0
@@ -32,10 +45,8 @@ class MeshConfig:
     def __post_init__(self) -> None:
         # Coerce to float so that radius=1 and radius=1.0 hash identically
         # (the mesh cache filename is derived from these values).
-        self.radius   = float(self.radius)
-        self.height   = float(self.height)
-        self.size_max = float(self.size_max)
-        self.size_min = float(self.size_min)
+        for name in ("radius", "height", "size_max", "size_min"):
+            object.__setattr__(self, name, float(getattr(self, name)))
 
         if self.radius <= 0:
             raise ValueError(f"radius must be positive, got: {self.radius}")
@@ -45,7 +56,9 @@ class MeshConfig:
             raise ValueError("size_min must be less than size_max")
 
 
-@dataclass
+# eq=False: fields holding NumPy arrays make field-by-field `==` ambiguous
+# and unhashable, so these two configs compare (and hash) by identity.
+@dataclass(frozen=True, eq=False)
 class ConductivityConfig:
     center   : np.ndarray = field(default_factory=lambda: np.array([0.0, 0.0, 0.0]))
     radius   : float      = 0.35
@@ -53,7 +66,7 @@ class ConductivityConfig:
     gamma_out: float      = 1.0
 
     def __post_init__(self) -> None:
-        self.center = np.asarray(self.center, dtype=float)
+        object.__setattr__(self, "center", _readonly_vector(self.center))
         if self.gamma_in <= 0 or self.gamma_out <= 0:
             raise ValueError("Conductivities must be positive (Lax-Milgram)")
         if self.radius <= 0:
@@ -68,29 +81,33 @@ class ConductivityConfig:
         return max(self.gamma_in, self.gamma_out)
 
 
-@dataclass
+@dataclass(frozen=True, eq=False)
 class EtaConfig:
-    centers : List[np.ndarray] = field(default_factory=lambda: [
-        np.array([ 0.3, 0.0, 0.0]),
-        np.array([-0.3, 0.0, 0.0]),
-    ])
+    centers : Tuple[np.ndarray, ...] = (
+        (0.3, 0.0, 0.0),
+        (-0.3, 0.0, 0.0),
+    )
     radius  : float = 0.20
     eta_in  : float = 1.0
     eta_out : float = 0.0
 
     def __post_init__(self) -> None:
-        self.centers = [np.asarray(c, dtype=float) for c in self.centers]
+        object.__setattr__(
+            self, "centers", tuple(_readonly_vector(c) for c in self.centers),
+        )
         if self.radius <= 0:
             raise ValueError("radius must be positive")
 
 
-@dataclass
+@dataclass(frozen=True)
 class CurrentConfig:
-    patterns: List[Tuple[float, float]] = field(
-        default_factory=lambda: [(1.0, -1.0)]
-    )
+    patterns: Tuple[Tuple[float, float], ...] = ((1.0, -1.0),)
 
     def __post_init__(self) -> None:
+        object.__setattr__(
+            self, "patterns",
+            tuple((float(g_top), float(g_bot)) for g_top, g_bot in self.patterns),
+        )
         for i, (g_top, g_bot) in enumerate(self.patterns):
             if not np.isclose(g_top + g_bot, 0.0, atol=1e-10):
                 raise ValueError(
@@ -99,7 +116,7 @@ class CurrentConfig:
                 )
 
 
-@dataclass
+@dataclass(frozen=True)
 class SolverConfig:
     rtol   : float = 1e-10
     atol   : float = 1e-12
@@ -112,7 +129,7 @@ class SolverConfig:
             raise ValueError("max_it must be positive")
 
 
-@dataclass
+@dataclass(frozen=True)
 class ConsistencyTestConfig:
     n_iter : int   = 50
     base   : float = 0.9
@@ -127,7 +144,7 @@ class ConsistencyTestConfig:
         return self.base ** np.arange(self.n_iter)
 
 
-@dataclass
+@dataclass(frozen=True)
 class EITConfig:
     mesh        : MeshConfig             = field(default_factory=MeshConfig)
     conductivity: ConductivityConfig     = field(default_factory=ConductivityConfig)
