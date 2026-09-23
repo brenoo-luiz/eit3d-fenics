@@ -1,11 +1,3 @@
-"""
-Consistency test using manufactured solution (7 steps from advisor).
-
-Exact solution: u(x,y,z) = x^2 - y^2
-gamma = 1, g = dot(grad(u_exact), n) over full boundary.
-Constant c subtracted from u_exact BEFORE solving (Marcelo's approach).
-"""
-
 import logging
 import sys
 from pathlib import Path
@@ -17,14 +9,12 @@ import dolfinx.plot
 import ufl
 import numpy as np
 import pyvista
-import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec
-from PIL import Image
 from mpi4py import MPI
 from petsc4py import PETSc
 
 from eit3d import EITConfig, EITPipeline
 from eit3d.config import OUTPUTS_DIR
+from eit3d.visualization.static import StaticRenderer, SurfacePanel
 from eit3d.solvers.neumann import NeumannSolver
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -35,17 +25,17 @@ pipe = EITPipeline(cfg)
 print(pipe.status())
 
 mesh, facet_tags = pipe.get_mesh()
-V                = pipe.get_function_space()
+V = pipe.get_function_space()
 
-gamma  = dolfinx.fem.Constant(mesh, PETSc.ScalarType(1.0))
+gamma = dolfinx.fem.Constant(mesh, PETSc.ScalarType(1.0))
 
 mesh.topology.create_connectivity(mesh.topology.dim - 1, mesh.topology.dim)
 ds_all = ufl.Measure("ds", domain=mesh)
-x      = ufl.SpatialCoordinate(mesh)
+x = ufl.SpatialCoordinate(mesh)
 
 u_exact_ufl = x[0]**2 - x[1]**2
-n           = ufl.FacetNormal(mesh)
-g           = ufl.dot(ufl.grad(u_exact_ufl), n)
+n = ufl.FacetNormal(mesh)
+g = ufl.dot(ufl.grad(u_exact_ufl), n)
 
 # subtract c from u_exact before solving
 integral_u = comm.allreduce(
@@ -55,8 +45,8 @@ area = comm.allreduce(
     dolfinx.fem.assemble_scalar(dolfinx.fem.form(
         dolfinx.fem.Constant(mesh, PETSc.ScalarType(1.0)) * ds_all)), op=MPI.SUM
 )
-c_val         = integral_u / area
-c_const       = dolfinx.fem.Constant(mesh, PETSc.ScalarType(c_val))
+c_val = integral_u / area
+c_const = dolfinx.fem.Constant(mesh, PETSc.ScalarType(c_val))
 u_exact_c_ufl = u_exact_ufl - c_const
 
 print(f"c = {c_val:.5e}  ->  int(u-c) ds = "
@@ -74,7 +64,7 @@ u_h = NeumannSolver(
 ).solve()
 
 # compare u_h with u_exact
-diff    = u_h - u_exact_fn
+diff = u_h - u_exact_fn
 norm_L2 = np.sqrt(comm.allreduce(dolfinx.fem.assemble_scalar(
     dolfinx.fem.form(ufl.inner(u_exact_fn, u_exact_fn) * ufl.dx)), op=MPI.SUM))
 norm_H1 = np.sqrt(comm.allreduce(dolfinx.fem.assemble_scalar(
@@ -89,56 +79,37 @@ u_err.x.array[:] = np.abs(u_h.x.array - u_exact_fn.x.array)
 err_max = float(u_err.x.array.max())
 
 # flux error
-flux_num  = ufl.dot(ufl.grad(u_h), n)
+flux_num = ufl.dot(ufl.grad(u_h), n)
 norm_flux = comm.allreduce(dolfinx.fem.assemble_scalar(
     dolfinx.fem.form(g**2 * ds_all)), op=MPI.SUM)
 erro_flux = np.sqrt(comm.allreduce(dolfinx.fem.assemble_scalar(
     dolfinx.fem.form((flux_num - g)**2 * ds_all)), op=MPI.SUM))
 
 # Render
-BG    = "#1e1e2e"
 topo, ct, geo = dolfinx.plot.vtk_mesh(V)
 
-grids  = {"u_exact": u_exact_fn.x.array.real,
-            "u_h"    : u_h.x.array.real,
-            "erro"   : u_err.x.array.real}
-clim_u   = [float(min(u_exact_fn.x.array.min(), u_h.x.array.min())),
-            float(max(u_exact_fn.x.array.max(), u_h.x.array.max()))]
-clim_err = [0.0, float(u_err.x.array.max())]
-cmaps    = {"u_exact": "turbo", "u_h": "turbo", "erro": "hot"}
-clims    = {"u_exact": clim_u,  "u_h": clim_u,  "erro": clim_err}
-tmps     = []
 
-for name, values in grids.items():
-    g_pv = pyvista.UnstructuredGrid(topo, ct, geo)
-    g_pv[name] = values
-    surf = g_pv.extract_surface(algorithm="dataset_surface")
-    tmp  = OUTPUTS_DIR / f"_tmp_{name}.png"
-    p    = pyvista.Plotter(off_screen=True, window_size=(1000, 1000))
-    p.add_mesh(surf, scalars=name, cmap=cmaps[name], clim=clims[name],
-                show_edges=False, lighting=True, smooth_shading=True,
-                show_scalar_bar=True)
-    p.set_background(BG); p.view_isometric()
-    p.screenshot(str(tmp)); p.close()
-    tmps.append(tmp)
+def make_grid(name, values):
+    grid = pyvista.UnstructuredGrid(topo, ct, geo)
+    grid[name] = values
+    return grid
 
-imgs   = [np.array(Image.open(t)) for t in tmps]
-titles = ["Exact solution  u = x^2 - y^2 - c",
-            "Numerical solution  u_h",
-            "Pointwise error  |u_h - u_exact|"]
 
-fig = plt.figure(figsize=(22, 8), facecolor=BG)
-gs  = gridspec.GridSpec(1, 3, figure=fig, hspace=0.01, wspace=0.03,
-                        left=0.02, right=0.98, top=0.93, bottom=0.01)
-for i, (img, title) in enumerate(zip(imgs, titles)):
-    ax = fig.add_subplot(gs[0, i])
-    ax.imshow(img); ax.axis("off"); ax.set_facecolor(BG)
-    ax.set_title(title, color="white", fontsize=14, pad=8)
+clim_u = (float(min(u_exact_fn.x.array.min(), u_h.x.array.min())),
+            float(max(u_exact_fn.x.array.max(), u_h.x.array.max())))
 
-out = OUTPUTS_DIR / "consistency_test.png"
-plt.savefig(str(out), dpi=150, bbox_inches="tight", facecolor=BG)
-plt.close()
-for t in tmps: t.unlink()
+out = StaticRenderer(cfg, OUTPUTS_DIR).render_surfaces(
+    [
+        SurfacePanel(make_grid("u_exact", u_exact_fn.x.array.real), "u_exact",
+                    "Exact solution  u = x^2 - y^2 - c", clim=clim_u),
+        SurfacePanel(make_grid("u_h", u_h.x.array.real), "u_h",
+                    "Numerical solution  u_h", clim=clim_u),
+        SurfacePanel(make_grid("error", u_err.x.array.real), "error",
+                    "Pointwise error  |u_h - u_exact|", cmap="hot",
+                    clim=(0.0, err_max)),
+    ],
+    filename="consistency_test.png",
+)
 
 # Results
 passed = (erro_L2/norm_L2 < 1e-2 and erro_flux/np.sqrt(norm_flux) < 5e-2)
