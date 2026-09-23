@@ -1,6 +1,10 @@
 """
+Unit tests for EITConfig dataclasses.
+
 These tests depend only on NumPy, so they run without FEniCS.
 """
+
+import dataclasses
 
 import numpy as np
 import pytest
@@ -127,6 +131,47 @@ class TestEITConfig:
     def test_summary_reflects_config(self):
         s = EITConfig(mesh=MeshConfig(radius=1.5)).summary()
         assert "radius=1.5" in s
+
+
+class TestImmutability:
+    """Configs are frozen: invariants cannot be broken after construction."""
+
+    def test_cannot_reassign_field(self):
+        cfg = MeshConfig()
+        with pytest.raises(dataclasses.FrozenInstanceError):
+            cfg.radius = -1.0
+
+    def test_cannot_reassign_nested(self):
+        cfg = EITConfig()
+        with pytest.raises(dataclasses.FrozenInstanceError):
+            cfg.mesh = MeshConfig(radius=2.0)
+
+    def test_center_is_read_only(self):
+        cfg = ConductivityConfig()
+        with pytest.raises(ValueError):
+            cfg.center[0] = 5.0
+
+    def test_eta_centers_are_read_only(self):
+        cfg = EtaConfig()
+        assert isinstance(cfg.centers, tuple)
+        with pytest.raises(ValueError):
+            cfg.centers[0][0] = 5.0
+
+    def test_center_is_a_copy(self):
+        src = np.array([0.1, 0.0, 0.0])
+        cfg = ConductivityConfig(center=src)
+        src[0] = 9.0
+        assert cfg.center[0] == 0.1
+
+    def test_patterns_are_tuples(self):
+        cfg = CurrentConfig(patterns=[[1, -1]])
+        assert cfg.patterns == ((1.0, -1.0),)
+
+    def test_replace_revalidates(self):
+        cfg = MeshConfig()
+        assert dataclasses.replace(cfg, radius=2).radius == 2.0
+        with pytest.raises(ValueError):
+            dataclasses.replace(cfg, radius=-1.0)
 
 
 class TestMeshCachePath:
