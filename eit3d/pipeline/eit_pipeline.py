@@ -1,7 +1,3 @@
-"""
-Main orchestrator for the EIT 3D project.
-"""
-
 from __future__ import annotations
 
 import logging
@@ -13,7 +9,7 @@ import dolfinx.fem
 import ufl
 from mpi4py import MPI
 
-from eit3d.config import CACHE_DIR, OUTPUTS_DIR, MESH_FILE, EITConfig
+from eit3d.config import CACHE_DIR, OUTPUTS_DIR, EITConfig
 from eit3d.fields.conductivity import ConductivityField, DirectionalField
 from eit3d.mesh.cylinder import CylinderMesh
 from eit3d.solvers.derivative import DerivativeSolver
@@ -23,14 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 class EITPipeline:
-    """
-    Main orchestrator for the EIT 3D project.
-
-    Cache strategy:
-        Mesh     -> saved to disk (~90s generation)
-        Gamma/Eta -> always recomputed (~1s)
-        Solution  -> always solved    (~10s)
-    """
+    """ Main orchestrator for the EIT 3D project """
 
     def __init__(
         self,
@@ -44,35 +33,41 @@ class EITPipeline:
         CACHE_DIR.mkdir(parents=True, exist_ok=True)
         OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)
 
+        self._cylinder   : Optional[CylinderMesh]              = None
         self._mesh       : Optional[dolfinx.mesh.Mesh]         = None
         self._facet_tags : Optional[dolfinx.mesh.MeshTags]     = None
         self._V          : Optional[dolfinx.fem.FunctionSpace]  = None
         self._force_mesh = force_mesh
 
     def get_mesh(self) -> Tuple[dolfinx.mesh.Mesh, dolfinx.mesh.MeshTags]:
+        """Return (mesh, facet_tags). Cache filename is hash of MeshConfig."""
         if self._mesh is None:
-            cylinder = CylinderMesh(
+            self._cylinder = CylinderMesh(
                 config=self._config.mesh,
-                mesh_file=MESH_FILE,
                 comm=self._comm,
                 force=self._force_mesh,
             )
-            self._mesh, self._facet_tags = cylinder.get()
+            self._mesh, self._facet_tags = self._cylinder.get()
         return self._mesh, self._facet_tags
 
     def get_function_space(self) -> dolfinx.fem.FunctionSpace:
+        """Return the P2 Lagrange function space."""
         if self._V is None:
             mesh, _ = self.get_mesh()
-            el      = basix.ufl.element("Lagrange", "tetrahedron", degree=2, shape=())
+            el      = basix.ufl.element(
+                "Lagrange", "tetrahedron", degree=2, shape=()
+            )
             self._V = dolfinx.fem.functionspace(mesh, el)
             logger.info("P2 space: %d DOFs", self._V.dofmap.index_map.size_global)
         return self._V
 
     def build_gamma(self) -> dolfinx.fem.Function:
+        """Build and return the conductivity field gamma (DG0)."""
         mesh, _ = self.get_mesh()
         return ConductivityField(mesh, self._config.conductivity).build()
 
     def build_eta(self) -> dolfinx.fem.Function:
+        """Build and return the directional field eta (DG0)."""
         mesh, _ = self.get_mesh()
         return DirectionalField(mesh, self._config.eta).build()
 
@@ -81,6 +76,7 @@ class EITPipeline:
         pattern: int                            = 0,
         gamma  : Optional[dolfinx.fem.Function] = None,
     ) -> dolfinx.fem.Function:
+        """Solve the EIT forward problem for a current pattern."""
         if gamma is None:
             gamma = self.build_gamma()
 
@@ -100,6 +96,7 @@ class EITPipeline:
         gamma  : Optional[dolfinx.fem.Function] = None,
         eta    : Optional[dolfinx.fem.Function] = None,
     ) -> dolfinx.fem.Function:
+        """Solve eq. (1.13) for the directional derivative omega."""
         if gamma is None:
             gamma = self.build_gamma()
         if eta is None:
@@ -115,8 +112,13 @@ class EITPipeline:
         ).solve()
 
     def status(self) -> str:
+        """Return a summary of the pipeline state and cache."""
+        from eit3d.mesh.cylinder import _mesh_cache_path
+        mesh_file = _mesh_cache_path(self._config.mesh)
         lines = [
             self._config.summary(),
-            f"mesh cache:   {'available' if MESH_FILE.exists() else 'not generated'}",
+            f"mesh cache:   "
+            f"{'available' if mesh_file.exists() else 'not generated'}"
+            f"  ({mesh_file.name})",
         ]
         return "\n".join(lines)
