@@ -18,17 +18,13 @@ import pytest
 pytest.importorskip("dolfinx")
 pytest.importorskip("gmsh")
 
-import basix.ufl  # noqa: E402
 import dolfinx  # noqa: E402
 import dolfinx.fem  # noqa: E402
 import ufl  # noqa: E402
 from mpi4py import MPI  # noqa: E402
 
-from eit3d.config import (  # noqa: E402
-    ConductivityConfig, EtaConfig, MeshConfig, SolverConfig,
-)
+from eit3d.config import ConductivityConfig, EtaConfig, SolverConfig  # noqa: E402
 from eit3d.fields.conductivity import ConductivityField, DirectionalField  # noqa: E402
-from eit3d.mesh.cylinder import CylinderMesh  # noqa: E402
 from eit3d.solvers import (  # noqa: E402
     DerivativeSolver, ForwardSolver, NeumannSolver,
 )
@@ -37,18 +33,7 @@ COMM   = MPI.COMM_WORLD
 SOLVER = SolverConfig()
 
 
-# Fixtures (module scope: the mesh and base solutions are built only once)
-@pytest.fixture(scope="module")
-def mesh_data(tmp_path_factory):
-    """Coarse cylinder mesh, cached in a temporary directory."""
-    cfg = MeshConfig(size_max=0.2, size_min=0.1)
-    cylinder = CylinderMesh(cfg, comm=COMM, cache_dir=tmp_path_factory.mktemp("cache"))
-    mesh, facet_tags = cylinder.get()
-    el = basix.ufl.element("Lagrange", "tetrahedron", degree=2, shape=())
-    V  = dolfinx.fem.functionspace(mesh, el)
-    return mesh, facet_tags, V
-
-
+# Fixtures (mesh_data comes from conftest.py; base solutions are built once per module)
 @pytest.fixture(scope="module")
 def fields(mesh_data):
     mesh, _, _ = mesh_data
