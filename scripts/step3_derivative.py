@@ -78,11 +78,13 @@ idx_min = int(np.argmin(y_vals))
 log_t   = np.log10(t_vals)
 log_y   = np.log10(y_vals)
 
-# Fit only on the initial linear descent (avoids plateau distorting the slope)
-n_fit    = max(2, min(30, idx_min))
-coeffs   = np.polyfit(log_t[:n_fit], log_y[:n_fit], 1)
+# Fit only on the asymptotic region: skip the pre-asymptotic start
+# (O(t^2) terms still relevant) and the solver-noise region near the minimum.
+n_start  = min(40, max(0, idx_min - 2))
+n_end    = max(n_start + 2, idx_min - 15)
+coeffs   = np.polyfit(log_t[n_start:n_end], log_y[n_start:n_end], 1)
 taxa     = coeffs[0]
-fit_line = np.polyval(coeffs, log_t[:n_fit])
+fit_line = np.polyval(coeffs, log_t[:n_end])
 
 # Render
 print("\nrendering...")
