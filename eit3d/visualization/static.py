@@ -36,7 +36,6 @@ class StaticRenderer(BaseRenderer):
         self._output_dir.mkdir(parents=True, exist_ok=True)
 
     # Public figures
-
     def render_mesh(
         self, grid: pyvista.UnstructuredGrid, filename: str = "step1_mesh.png",
     ) -> Path:
@@ -52,7 +51,7 @@ class StaticRenderer(BaseRenderer):
         logger.info("Saved: %s", out)
         return out
 
-    def render_geometry(self, filename: str = "step3_a_geometria.png") -> Path:
+    def render_geometry(self, filename: str = "step3_a_geometry.png") -> Path:
         """Conductivity inclusion (left) and derivative direction spheres (right)."""
         gam, eta = self._config.conductivity, self._config.eta
         cyl = (self._cylinder(), "#1a3a6a", 0.35)
@@ -160,7 +159,7 @@ class StaticRenderer(BaseRenderer):
         slope   : float,
         fit_line: np.ndarray,
         idx_min : int,
-        filename: str = "step3_d_consistencia.png",
+        filename: str = "step3_d_consistency.png",
     ) -> Path:
         """y_n vs n (semilog) and log y_n vs log t_n with the fitted rate."""
         ns    = np.arange(len(y_vals))
