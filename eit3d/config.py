@@ -1,14 +1,3 @@
-"""
-Centralized configuration for the EIT 3D project.
-All physical, geometric and numerical parameters are defined here.
-
-Every config is an immutable value object (frozen dataclass): invariants are
-validated once in __post_init__ and cannot be broken afterwards, e.g.
-`cfg.mesh.radius = -1` raises FrozenInstanceError. NumPy arrays are stored
-read-only and lists are stored as tuples for the same reason.
-To change a parameter, build a new object: dataclasses.replace(cfg, radius=2.0).
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -118,7 +107,7 @@ class CurrentConfig:
 
 @dataclass(frozen=True)
 class SolverConfig:
-    rtol   : float = 1e-10
+    rtol   : float = 1e-11
     atol   : float = 1e-12
     max_it : int   = 1000
 
