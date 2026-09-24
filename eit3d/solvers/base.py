@@ -16,9 +16,18 @@ logger = logging.getLogger(__name__)
 
 Coefficient = Union[dolfinx.fem.Function, dolfinx.fem.Constant]
 
+_OPTIONS_PREFIX = "eit3d_"
+_HYPRE_3D_OPTIONS = {
+    "pc_hypre_type"                      : "boomeramg",
+    "pc_hypre_boomeramg_strong_threshold": 0.5,
+    "pc_hypre_boomeramg_coarsen_type"    : "HMIS",
+    "pc_hypre_boomeramg_interp_type"     : "ext+i",
+    "pc_hypre_boomeramg_P_max"           : 4,
+    "pc_hypre_boomeramg_agg_nl"          : 1,
+}
+
 
 class BaseSolver(ABC):
-
 
     def __init__(
         self,
@@ -36,7 +45,6 @@ class BaseSolver(ABC):
         self._ds_all = ufl.Measure("ds", domain=mesh)
 
     # Template Method
-
     def solve(self) -> dolfinx.fem.Function:
         """Solve the variational problem and return the normalized solution."""
         w = ufl.TrialFunction(self._V)
@@ -98,7 +106,7 @@ class BaseSolver(ABC):
                 atol=self._config.atol,
                 max_it=self._config.max_it,
             )
-            ksp.setFromOptions()
+            self._set_amg_options(ksp)
 
             u_h = dolfinx.fem.Function(self._V)
             ksp.solve(b, u_h.x.petsc_vec)
@@ -118,6 +126,15 @@ class BaseSolver(ABC):
             for obj in (ksp, ns, b, ns_vec, A):
                 if obj is not None:
                     obj.destroy()
+
+    @staticmethod
+    def _set_amg_options(ksp: PETSc.KSP) -> None:
+        opts = PETSc.Options()
+        for key, value in _HYPRE_3D_OPTIONS.items():
+            if not opts.hasName(_OPTIONS_PREFIX + key):
+                opts[_OPTIONS_PREFIX + key] = value
+        ksp.setOptionsPrefix(_OPTIONS_PREFIX)
+        ksp.setFromOptions()
 
     def _normalize_boundary_mean(self, u_h: dolfinx.fem.Function) -> None:
         integral = self._comm.allreduce(
