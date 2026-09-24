@@ -8,6 +8,7 @@ verified by the scripts:
     - every solution satisfies int_dOmega u ds = 0 (H^1_diamond normalization)
     - forward solution is odd in z (symmetry of gamma and g)
     - directional derivative is first-order consistent (slope 1 in log-log)
+    - adjoint relation <F'* h, sigma> = <h, F' sigma> holds
 
 Skipped automatically when FEniCS (dolfinx) or gmsh are not installed.
 """
@@ -26,14 +27,14 @@ from mpi4py import MPI  # noqa: E402
 from eit3d.config import ConductivityConfig, EtaConfig, SolverConfig  # noqa: E402
 from eit3d.fields.conductivity import ConductivityField, DirectionalField  # noqa: E402
 from eit3d.solvers import (  # noqa: E402
-    DerivativeSolver, ForwardSolver, NeumannSolver,
+    AdjointSolver, DerivativeSolver, ForwardSolver, NeumannSolver,
 )
 
 COMM   = MPI.COMM_WORLD
 SOLVER = SolverConfig()
 
 
-# Fixtures (mesh_data comes from conftest.py; base solutions are built once per module)
+# Fixtures
 @pytest.fixture(scope="module")
 def fields(mesh_data):
     mesh, _, _ = mesh_data
@@ -132,3 +133,49 @@ def test_derivative_first_order_consistency(mesh_data, fields, u_gamma, omega):
 
     slope = np.polyfit(np.log10(t_vals), np.log10(y_vals), 1)[0]
     assert 0.95 < slope < 1.05
+
+
+def test_adjoint_relation(mesh_data, fields, u_gamma, omega):
+    """<F'(gamma)* h, sigma>_Omega = <h, F'(gamma) sigma>_dOmega, h without symmetry."""
+    mesh, _, V = mesh_data
+    gamma, sigma = fields
+    x  = ufl.SpatialCoordinate(mesh)
+    ds = ufl.Measure("ds", domain=mesh)
+    h  = x[2]**3 + x[0] * x[2]
+
+    adj = AdjointSolver(mesh, V, gamma, u_gamma, h, SOLVER, COMM).solve()
+
+    lhs = integrate(adj * sigma * ufl.dx)
+    rhs = integrate(h * omega * ds)
+    assert abs(lhs - rhs) / abs(rhs) < 1e-8
+
+
+def test_adjoint_relation_caps_lateral_h(mesh_data, fields, u_gamma, omega):
+    """
+    Advisor's h (2 on the caps, -1 on the lateral surface). <h, omega> is ~0 by
+    parity, so the error is measured relative to ||F'* h|| ||sigma||.
+    """
+    mesh, _, V = mesh_data
+    gamma, sigma = fields
+    z  = ufl.SpatialCoordinate(mesh)[2]
+    ds = ufl.Measure("ds", domain=mesh)
+    h  = ufl.conditional(ufl.gt(abs(z), 1.0 - 1e-8), 2.0, -1.0)
+
+    adj = AdjointSolver(mesh, V, gamma, u_gamma, h, SOLVER, COMM).solve()
+
+    lhs   = integrate(adj * sigma * ufl.dx)
+    rhs   = integrate(h * omega * ds)
+    scale = np.sqrt(integrate(adj**2 * ufl.dx)) * np.sqrt(integrate(sigma**2 * ufl.dx))
+    assert abs(lhs - rhs) / scale < 1e-9
+
+
+def test_adjoint_psi_boundary_mean_zero(mesh_data, fields, u_gamma):
+    mesh, _, V = mesh_data
+    gamma, _ = fields
+    x = ufl.SpatialCoordinate(mesh)
+
+    solver = AdjointSolver(mesh, V, gamma, u_gamma, x[2] + 1.0, SOLVER, COMM)
+    with pytest.raises(RuntimeError):
+        _ = solver.psi
+    solver.solve()
+    assert abs(boundary_mean(solver.psi, mesh)) < 1e-12
