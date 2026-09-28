@@ -107,7 +107,7 @@ def main() -> None:
     report.info("Ajuste da inclinação", f"n = {window[0]} a {window[-1]}  (t entre {t_vals[window[-1]]:.0e} e {t_vals[window[0]]:.0e})")
     ok_slope = report.check(
         "Inclinação (log y  ×  log t)", slope, SLOPE_RANGE[0] < slope < SLOPE_RANGE[1],
-        ideal=f"1 (aceitável {SLOPE_RANGE[0]:g} a {SLOPE_RANGE[1]:g})", fmt=".3f",
+        ideal="1", fmt=".3f",
     )
 
     renderer = StaticRenderer(cfg, OUTPUTS_DIR)

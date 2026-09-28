@@ -72,8 +72,7 @@ def main() -> None:
     int_h_msh = integrate(h * ds)
     int_abs_h = integrate(abs(h) * ds)
     ok_h      = report.check_zero("∫h na fronteira (geometria exata)", int_h)
-    report.check("∫h na fronteira (malha)", int_h_msh, abs(int_h_msh) < 1e-2 * int_abs_h,
-                ideal="~0 (erro da malha)")
+    report.check("∫h na fronteira (malha)", int_h_msh, abs(int_h_msh) < 1e-2 * int_abs_h, ideal="~0")
 
     adjoint = AdjointSolver(mesh=mesh, V=V, gamma=gamma, u_gamma=u, h=h, config=cfg.solver, comm=comm)
     adj     = adjoint.solve()
@@ -89,8 +88,7 @@ def main() -> None:
     a     = abs(lhs - rhs) / abs(rhs)
     report.info("⟨F'(γ)*h, σ⟩", f"{lhs: .8e}")
     report.info("⟨h, F'(γ)σ⟩", f"{rhs: .8e}")
-    ideal = report.below(TOL_A)
-    ok_a  = report.check("a", a, a < TOL_A, ideal)
+    ok_a  = report.check("a", a, a < TOL_A)
 
     x      = ufl.SpatialCoordinate(mesh)
     h_asym = x[2] ** 3 + x[0] * x[2]
@@ -99,7 +97,7 @@ def main() -> None:
     rhs_a  = integrate(h_asym * omega * ds)
     a_asym = abs(lhs_a - rhs_a) / abs(rhs_a)
     report.section("Verificação extra  (h = z³ + xz, sem a simetria do h acima)")
-    ok_x = report.check("a", a_asym, a_asym < TOL_A, ideal)
+    ok_x = report.check("a", a_asym, a_asym < TOL_A)
 
     report.result(ok1 and ok_h and ok2 and ok_a and ok_x, "adjunto correto", "adjunto com problema")
 

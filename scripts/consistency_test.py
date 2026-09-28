@@ -63,12 +63,11 @@ def main() -> None:
     err_max = float(u_err.x.array.max())
 
     report.section("Diferença entre a solução numérica e a exata")
-    ideal = report.below(TOL)
     ok = all([
-        report.check("Erro relativo em L2", err_L2, err_L2 < TOL, ideal),
-        report.check("Erro relativo no gradiente (H1)", err_H1, err_H1 < TOL, ideal),
-        report.check("Erro relativo do fluxo na borda", err_flux, err_flux < TOL, ideal),
-        report.check("Maior erro ponto a ponto", err_max, err_max < TOL, ideal),
+        report.check("Erro relativo em L2", err_L2, err_L2 < TOL),
+        report.check("Erro relativo no gradiente (H1)", err_H1, err_H1 < TOL),
+        report.check("Erro relativo do fluxo na borda", err_flux, err_flux < TOL),
+        report.check("Maior erro ponto a ponto", err_max, err_max < TOL),
     ])
 
     topo, ct, geo = dolfinx.plot.vtk_mesh(V)
