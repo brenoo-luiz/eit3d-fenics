@@ -3,12 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Iterable
 
-WIDTH    = 66
 TOL_ZERO = 1e-10
+LABEL    = 36
 
-
-def _mark(ok: bool) -> str:
-    return "✓" if ok else "✗"
+_columns_pending = False
 
 
 def _thousands(n: int) -> str:
@@ -16,30 +14,31 @@ def _thousands(n: int) -> str:
 
 
 def title(text: str) -> None:
-    print("\n" + "=" * WIDTH)
-    print(text)
-    print("=" * WIDTH)
+    print(f"\n{text}\n")
 
 
 def section(text: str) -> None:
+    global _columns_pending
+    _columns_pending = True
     print(f"\n{text}")
 
 
 def info(label: str, value: str) -> None:
-    print(f"  {label:<34} {value}")
+    print(f"  {label:<{LABEL}}{value}")
 
 
 def check(label: str, value: float, ok: bool, ideal: str = "0", fmt: str = ".1e") -> bool:
-    print(f"  {label:<34} {value:>10{fmt}}   ideal: {ideal:<22} {_mark(ok)}")
+    global _columns_pending
+    if _columns_pending:
+        print(f"  {'':<{LABEL}}{'valor':>10}{'ideal':>9}   situação")
+        _columns_pending = False
+    status = "correto" if ok else "incorreto"
+    print(f"  {label:<{LABEL}}{value:>10{fmt}}{ideal:>9}   {status}")
     return ok
 
 
-def below(tol: float) -> str:
-    return f"0 (aceitável < {tol:.0e})".replace("e-0", "e-")
-
-
 def check_zero(label: str, value: float, tol: float = TOL_ZERO) -> bool:
-    return check(label, value, abs(value) < tol, ideal="0")
+    return check(label, value, abs(value) < tol)
 
 
 def mesh(pipe) -> None:
@@ -54,9 +53,7 @@ def mesh(pipe) -> None:
 
 
 def result(ok: bool, text_ok: str, text_fail: str) -> None:
-    print("\n" + "-" * WIDTH)
-    print(f"RESULTADO: {text_ok if ok else text_fail}  {_mark(ok)}")
-    print("-" * WIDTH)
+    print(f"\nResultado: {text_ok if ok else text_fail}")
 
 
 def files(paths: Iterable[Path]) -> None:
