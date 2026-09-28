@@ -27,16 +27,15 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import dolfinx  # noqa: E402
 
-from eit3d import EITConfig, EITPipeline  # noqa: E402
-from eit3d.config import BOTTOM_TAG, LATERAL_TAG, TOP_TAG  # noqa: E402
+from eit3d import EITConfig, EITPipeline, report  # noqa: E402
 from eit3d.solvers import AdjointSolver  # noqa: E402
 
-H_CAPS    = 2.0    # value of h on the top and bottom caps
-H_LATERAL = -1.0   # value of h on the lateral surface
+H_CAPS    = 2.0
+H_LATERAL = -1.0
+TOL_A     = 1e-6
 
 
 def cap_lateral_pattern(mesh, height: float, caps: float, lateral: float):
-    """h = caps on the caps (|z| = height/2), lateral elsewhere on the boundary."""
     z = ufl.SpatialCoordinate(mesh)[2]
     return ufl.conditional(ufl.gt(abs(z), height / 2.0 - 1e-8), caps, lateral)
 
@@ -47,74 +46,62 @@ def main() -> None:
     comm = MPI.COMM_WORLD
     cfg  = EITConfig()
     pipe = EITPipeline(cfg)
-    print(pipe.status())
 
-    mesh, facet_tags = pipe.get_mesh()
-    V      = pipe.get_function_space()
-    ds     = ufl.Measure("ds", domain=mesh)
-    ds_tag = ufl.Measure("ds", domain=mesh, subdomain_data=facet_tags)
-    one    = dolfinx.fem.Constant(mesh, dolfinx.default_scalar_type(1.0))
+    report.title("TESTE DO ADJUNTO  F'(γ)*h")
+    report.mesh(pipe)
+
+    mesh, _ = pipe.get_mesh()
+    V  = pipe.get_function_space()
+    ds = ufl.Measure("ds", domain=mesh)
 
     def integrate(expr) -> float:
-        return comm.allreduce(
-            dolfinx.fem.assemble_scalar(dolfinx.fem.form(expr)), op=MPI.SUM,
-        )
+        return comm.allreduce(dolfinx.fem.assemble_scalar(dolfinx.fem.form(expr)), op=MPI.SUM)
 
     gamma = pipe.build_gamma()
-    sigma = pipe.build_eta()          # sigma = same direction eta as in step3
+    sigma = pipe.build_eta()
+    g_top, g_bot = cfg.current.patterns[0]
 
-    # 1. forward problem with gamma and g
-    print("\n1. forward problem with gamma and g")
+    report.section(f"Passo 1: problema direto com γ e g  (g = {g_top:+g} topo, {g_bot:+g} base)")
     u = pipe.solve_forward(pattern=0, gamma=gamma)
-    print(f"   int u ds   = {integrate(u * ds):.2e}")
+    ok1 = report.check_zero("∫u na fronteira", integrate(u * ds))
 
-    # 2. forward problem with gamma and h
-    print(f"\n2. forward problem with gamma and h  (h = {H_CAPS:g} caps / {H_LATERAL:g} lateral)")
-    area_caps = integrate(one * ds_tag(TOP_TAG)) + integrate(one * ds_tag(BOTTOM_TAG))
-    area_lat  = integrate(one * ds_tag(LATERAL_TAG))
+    report.section(f"Passo 2: problema direto com γ e h  (h = {H_CAPS:g} nas tampas, {H_LATERAL:g} na lateral)")
     r, height = cfg.mesh.radius, cfg.mesh.height
-    exact_h   = H_CAPS * 2 * np.pi * r**2 + H_LATERAL * 2 * np.pi * r * height
     h         = cap_lateral_pattern(mesh, height, H_CAPS, H_LATERAL)
-    print(f"   int h ds   = {exact_h:.2e}  (exact geometry)")
-    print(f"   int h ds   = {integrate(h * ds):.2e}  (mesh: caps {area_caps:.4f}, "
-            f"lateral {area_lat:.4f}; removed by the solver)")
+    int_h     = H_CAPS * 2 * np.pi * r**2 + H_LATERAL * 2 * np.pi * r * height
+    int_h_msh = integrate(h * ds)
+    int_abs_h = integrate(abs(h) * ds)
+    ok_h      = report.check_zero("∫h na fronteira (geometria exata)", int_h)
+    report.check("∫h na fronteira (malha)", int_h_msh, abs(int_h_msh) < 1e-2 * int_abs_h,
+                ideal="~0 (erro da malha)")
 
-    adjoint = AdjointSolver(
-        mesh=mesh, V=V, gamma=gamma, u_gamma=u, h=h,
-        config=cfg.solver, comm=comm,
-    )
-    adj = adjoint.solve()
-    print(f"   int psi ds = {integrate(adjoint.psi * ds):.2e}")
+    adjoint = AdjointSolver(mesh=mesh, V=V, gamma=gamma, u_gamma=u, h=h, config=cfg.solver, comm=comm)
+    adj     = adjoint.solve()
+    ok2     = report.check_zero("∫ψ na fronteira", integrate(adjoint.psi * ds))
 
-    # 3. F'(gamma)* h
-    print("\n3. F'(gamma)* h = -grad(u).grad(psi)")
-    print(f"   range      = [{adj.x.array.min():.4f}, {adj.x.array.max():.4f}]")
+    report.section("Passo 3: F'(γ)*h = -∇u·∇ψ")
+    report.info("Calculado", f"valores entre {adj.x.array.min():.2f} e {adj.x.array.max():.2f}")
 
-    # Consistency test
-    print("\nconsistency test")
+    report.section("Teste de consistência  (σ = mesma direção η do step3)")
     omega = pipe.solve_derivative(u_gamma=u, gamma=gamma, eta=sigma)
     lhs   = integrate(adj * sigma * ufl.dx)
     rhs   = integrate(h * omega * ds)
     a     = abs(lhs - rhs) / abs(rhs)
-    scale = np.sqrt(integrate(adj**2 * ufl.dx)) * np.sqrt(integrate(sigma**2 * ufl.dx))
+    report.info("⟨F'(γ)*h, σ⟩", f"{lhs: .8e}")
+    report.info("⟨h, F'(γ)σ⟩", f"{rhs: .8e}")
+    ideal = report.below(TOL_A)
+    ok_a  = report.check("a", a, a < TOL_A, ideal)
 
-    print(f"   <F'(gamma)* h, sigma> = {lhs: .10e}")
-    print(f"   <h, F'(gamma) sigma>  = {rhs: .10e}")
-    print(f"   a                     = {a:.2e}")
-    print(f"   a (scaled by ||F'* h|| ||sigma|| = {scale:.3e}) = {abs(lhs - rhs) / scale:.2e}")
-
-    # h above is even in z and omega is odd in z, so <h, omega> is zero for the
-    # exact geometry and the denominator of a is only mesh asymmetry. Repeat with
-    # an h without that symmetry to check a with a well-conditioned denominator.
     x      = ufl.SpatialCoordinate(mesh)
     h_asym = x[2] ** 3 + x[0] * x[2]
     adj_a  = AdjointSolver(mesh, V, gamma, u, h_asym, cfg.solver, comm).solve()
     lhs_a  = integrate(adj_a * sigma * ufl.dx)
     rhs_a  = integrate(h_asym * omega * ds)
-    print("\ncomplementary check  (h = z^3 + x z, no parity cancellation)")
-    print(f"   <F'(gamma)* h, sigma> = {lhs_a: .10e}")
-    print(f"   <h, F'(gamma) sigma>  = {rhs_a: .10e}")
-    print(f"   a                     = {abs(lhs_a - rhs_a) / abs(rhs_a):.2e}")
+    a_asym = abs(lhs_a - rhs_a) / abs(rhs_a)
+    report.section("Verificação extra  (h = z³ + xz, sem a simetria do h acima)")
+    ok_x = report.check("a", a_asym, a_asym < TOL_A, ideal)
+
+    report.result(ok1 and ok_h and ok2 and ok_a and ok_x, "adjunto correto", "adjunto com problema")
 
 
 if __name__ == "__main__":
