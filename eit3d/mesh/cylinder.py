@@ -88,6 +88,7 @@ class CylinderMesh:
         if gmsh.isInitialized():
             gmsh.finalize()
         gmsh.initialize()
+        gmsh.option.setNumber("General.Terminal", 0)
 
         try:
             half_h = self._config.height / 2.0
