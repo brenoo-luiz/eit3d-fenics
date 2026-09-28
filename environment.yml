@@ -291,3 +291,6 @@ dependencies:
   - zstd=1.5.7
   - pip:
       - gmsh==4.15.2
+      - iniconfig==2.3.0
+      - pluggy==1.6.0
+      - pytest==9.1.1
