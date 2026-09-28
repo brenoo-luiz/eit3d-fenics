@@ -24,8 +24,8 @@ class EITPipeline:
     Cache strategy:
         Mesh      -> saved to disk, filename derived from config hash
                     (changing any mesh parameter triggers regeneration)
-        Gamma/Eta -> always recomputed (~1s)
-        Solution  -> always solved    (~10s)
+        Gamma/Eta -> always recomputed
+        Solution  -> always solved
     """
 
     def __init__(
@@ -37,7 +37,7 @@ class EITPipeline:
         self._config = config
         self._comm   = comm
 
-        # Cheap: only computes the cache path, the mesh is built lazily in get().
+        # Cheap
         self._cylinder = CylinderMesh(
             config=config.mesh,
             comm=comm,
@@ -48,6 +48,10 @@ class EITPipeline:
         self._mesh       : Optional[dolfinx.mesh.Mesh]         = None
         self._facet_tags : Optional[dolfinx.mesh.MeshTags]     = None
         self._V          : Optional[dolfinx.fem.FunctionSpace] = None
+
+    @property
+    def config(self) -> EITConfig:
+        return self._config
 
     def get_mesh(self) -> Tuple[dolfinx.mesh.Mesh, dolfinx.mesh.MeshTags]:
         """Return (mesh, facet_tags), loading or generating on first call."""
