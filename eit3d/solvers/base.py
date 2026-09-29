@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
-from typing import Union
+from typing import List, Union
 
 import dolfinx
 import dolfinx.fem.petsc
@@ -47,21 +47,24 @@ class BaseSolver(ABC):
     # Template Method
     def solve(self) -> dolfinx.fem.Function:
         """Solve the variational problem and return the normalized solution."""
+        return self.solve_all()[0]
+
+    def solve_all(self) -> List[dolfinx.fem.Function]:
         w = ufl.TrialFunction(self._V)
         v = ufl.TestFunction(self._V)
 
-        a_form = dolfinx.fem.form(self._bilinear_form(w, v))
-        L_form = dolfinx.fem.form(self._linear_form(v))
+        a_form  = dolfinx.fem.form(self._bilinear_form(w, v))
+        L_forms = [dolfinx.fem.form(L) for L in self._linear_forms(v)]
 
-        u_h = self._assemble_and_solve(a_form, L_form)
-        self._normalize_boundary_mean(u_h)
-
-        logger.info(
-            "%s: solution in [%.4f, %.4f]",
-            type(self).__name__,
-            float(u_h.x.array.min()), float(u_h.x.array.max()),
-        )
-        return u_h
+        solutions = self._assemble_and_solve_many(a_form, L_forms)
+        for u_h in solutions:
+            self._normalize_boundary_mean(u_h)
+            logger.info(
+                "%s: solution in [%.4f, %.4f]",
+                type(self).__name__,
+                float(u_h.x.array.min()), float(u_h.x.array.max()),
+            )
+        return solutions
 
     # Hooks
     def _bilinear_form(self, w: ufl.Argument, v: ufl.Argument) -> ufl.Form:
@@ -72,12 +75,33 @@ class BaseSolver(ABC):
     def _linear_form(self, v: ufl.Argument) -> ufl.Form:
         """Right-hand side L(v). Implemented by each concrete solver."""
 
+    def _linear_forms(self, v: ufl.Argument) -> List[ufl.Form]:
+        return [self._linear_form(v)]
+
+    def _centered_flux(self, f: ufl.core.expr.Expr, ds_f: ufl.Measure, v: ufl.Argument) -> ufl.Form:
+        one  = dolfinx.fem.Constant(self._mesh, PETSc.ScalarType(1.0))
+        area = self._comm.allreduce(
+            dolfinx.fem.assemble_scalar(dolfinx.fem.form(one * self._ds_all)), op=MPI.SUM,
+        )
+        mean = self._comm.allreduce(
+            dolfinx.fem.assemble_scalar(dolfinx.fem.form(f * ds_f)), op=MPI.SUM,
+        ) / area
+        c = dolfinx.fem.Constant(self._mesh, PETSc.ScalarType(mean))
+        return f * v * ds_f - c * v * self._ds_all
+
     # Shared implementation
     def _assemble_and_solve(
         self,
         a_form: dolfinx.fem.Form,
         L_form: dolfinx.fem.Form,
     ) -> dolfinx.fem.Function:
+        return self._assemble_and_solve_many(a_form, [L_form])[0]
+
+    def _assemble_and_solve_many(
+        self,
+        a_form : dolfinx.fem.Form,
+        L_forms: List[dolfinx.fem.Form],
+    ) -> List[dolfinx.fem.Function]:
         A = b = ns_vec = ns = ksp = None
         try:
             A = dolfinx.fem.petsc.assemble_matrix(a_form)
@@ -90,13 +114,6 @@ class BaseSolver(ABC):
             A.setNullSpace(ns)
             A.setTransposeNullSpace(ns)
 
-            b = A.createVecRight()
-            with b.localForm() as loc_b:
-                loc_b.set(0.0)
-            dolfinx.fem.petsc.assemble_vector(b, L_form)
-            b.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
-            ns.remove(b)
-
             ksp = PETSc.KSP().create(self._comm)
             ksp.setOperators(A)
             ksp.setType(PETSc.KSP.Type.CG)
@@ -108,20 +125,30 @@ class BaseSolver(ABC):
             )
             self._set_amg_options(ksp)
 
-            u_h = dolfinx.fem.Function(self._V)
-            ksp.solve(b, u_h.x.petsc_vec)
-            u_h.x.scatter_forward()
+            b = A.createVecRight()
+            solutions = []
+            for L_form in L_forms:
+                with b.localForm() as loc_b:
+                    loc_b.set(0.0)
+                dolfinx.fem.petsc.assemble_vector(b, L_form)
+                b.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
+                ns.remove(b)
 
-            reason = ksp.getConvergedReason()
-            if reason < 0:
-                raise RuntimeError(
-                    f"{type(self).__name__}: KSP diverged (reason={reason})"
+                u_h = dolfinx.fem.Function(self._V)
+                ksp.solve(b, u_h.x.petsc_vec)
+                u_h.x.scatter_forward()
+
+                reason = ksp.getConvergedReason()
+                if reason < 0:
+                    raise RuntimeError(
+                        f"{type(self).__name__}: KSP diverged (reason={reason})"
+                    )
+                logger.info(
+                    "%s: converged in %d iterations",
+                    type(self).__name__, ksp.getIterationNumber(),
                 )
-            logger.info(
-                "%s: converged in %d iterations",
-                type(self).__name__, ksp.getIterationNumber(),
-            )
-            return u_h
+                solutions.append(u_h)
+            return solutions
         finally:
             for obj in (ksp, ns, b, ns_vec, A):
                 if obj is not None:
