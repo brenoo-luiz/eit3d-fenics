@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional, Sequence, Tuple
+from typing import List, Mapping, Optional, Sequence, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -216,6 +216,50 @@ class StaticRenderer(BaseRenderer):
         plt.tight_layout(pad=1.0)
         return self._save(fig, filename)
 
+    def render_convergence(
+        self,
+        curves  : Mapping[str, Tuple[np.ndarray, np.ndarray]],
+        filename: str,
+    ) -> Path:
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(18, 7), facecolor=self.BG)
+        colors = ["#44aaff", "#ff7744", "#66dd88", "#ffcc44", "#cc88ff"]
+        for (label, (residuals, errors)), color in zip(curves.items(), colors):
+            ks = np.arange(len(residuals))
+            ax1.semilogy(ks, residuals, "-", color=color, linewidth=2, label=label)
+            ax2.plot(ks, errors, "-", color=color, linewidth=2, label=label)
+        ax1.set_title(r"Residual  $\|F_G(\gamma_k) - \tilde u\|$", color="white", fontsize=13)
+        ax2.set_title(r"Relative error  $\|\gamma^+ - \gamma_k\| / \|\gamma^+\|$", color="white", fontsize=13)
+        for ax in (ax1, ax2):
+            ax.set_xlabel("iteration k", color="white", fontsize=12)
+            self._style_axes(ax)
+        plt.tight_layout(pad=1.0)
+        return self._save(fig, filename)
+
+    def render_conductivity_sections(
+        self,
+        fields  : Sequence[Tuple[str, object]],
+        filename: str,
+        spheres : Sequence[Tuple[Sequence[float], float]] = (),
+        axis    : str = "y",
+        plane   : float = 0.0,
+        clim    : Optional[Tuple[float, float]] = None,
+        ncols   : int = 4,
+    ) -> Path:
+        import dolfinx.plot
+
+        overlays = [self._section_circle(c, r, AXES[axis], plane) for c, r in spheres]
+        images   = []
+        for _, f in fields:
+            mesh  = f.function_space.mesh
+            n     = mesh.topology.index_map(mesh.topology.dim).size_local
+            cells = np.arange(n, dtype=np.int32)
+            topo, ct, geo = dolfinx.plot.vtk_mesh(mesh, mesh.topology.dim, cells)
+            grid  = pyvista.UnstructuredGrid(topo, ct, geo)
+            grid.cell_data["gamma"] = f.x.array[f.function_space.dofmap.list[cells, 0]]
+            lims  = clim if clim is not None else self._clim(grid, "gamma")
+            images.append(self._section_image(grid, "gamma", "viridis", lims, axis, plane, overlays, bar="γ"))
+        return self._compose(images, [title for title, _ in fields], filename, ncols=ncols)
+
     # Titles
     def _geometry_titles(self) -> List[str]:
         gam, eta = self._config.conductivity, self._config.eta
@@ -272,6 +316,7 @@ class StaticRenderer(BaseRenderer):
     def _section_image(
         self, grid, scalar: str, cmap: str, clim,
         axis: str, plane: float, overlays: Sequence[pyvista.PolyData] = (),
+        bar: Optional[str] = None,
     ) -> np.ndarray:
         """Clip the domain by the plane {axis = plane} and look at the cut face."""
         idx    = AXES[axis]
@@ -284,7 +329,8 @@ class StaticRenderer(BaseRenderer):
         p.add_mesh(grid.clip(normal=axis, origin=origin),
                     scalars=scalar, cmap=cmap, clim=clim,
                     show_edges=False, lighting=True, smooth_shading=True,
-                    show_scalar_bar=False)
+                    show_scalar_bar=bar is not None,
+                    scalar_bar_args=self._scalar_bar_args(bar) if bar is not None else None)
         for overlay in overlays:
             if overlay.n_points:
                 p.add_mesh(overlay, color="white", line_width=3)
@@ -300,13 +346,20 @@ class StaticRenderer(BaseRenderer):
         return self._section_image(grid, scalar, cmap, clim, "x", plane, [circle])
 
     # Figure assembly
-    def _compose(self, images: Sequence[np.ndarray], titles: Sequence[str], filename: str) -> Path:
-        n = len(images)
-        fig, axes = plt.subplots(1, n, figsize=(8 * n, 8), facecolor=self.BG)
-        for ax, img, title in zip(np.atleast_1d(axes), images, titles):
-            ax.imshow(img)
+    def _compose(
+        self, images: Sequence[np.ndarray], titles: Sequence[str], filename: str,
+        ncols: Optional[int] = None,
+    ) -> Path:
+        n     = len(images)
+        ncols = n if ncols is None else min(ncols, n)
+        nrows = int(np.ceil(n / ncols))
+        fig, axes = plt.subplots(nrows, ncols, figsize=(8 * ncols, 8 * nrows), facecolor=self.BG)
+        axes = np.atleast_1d(axes).ravel()
+        for ax in axes:
             ax.axis("off")
             ax.set_facecolor(self.BG)
+        for ax, img, title in zip(axes, images, titles):
+            ax.imshow(img)
             ax.set_title(title, color="white", fontsize=13, pad=8)
         plt.tight_layout(pad=0.3)
         return self._save(fig, filename)
