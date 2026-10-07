@@ -36,8 +36,7 @@ TRUE_VALUE = 10.0
 BACKGROUND = 1.0
 STEPS = (1.0, 0.1, 0.01)
 N_ITER = 100
-SNAPSHOT_EVERY = 10
-PRINT_EVERY = 10
+N_SNAPSHOTS = 10
 TOL_TRANSFER = 1e-2
 
 
@@ -45,7 +44,16 @@ def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--iterations", type=int, default=N_ITER)
     parser.add_argument("--steps", type=float, nargs="+", default=list(STEPS))
-    return parser.parse_args()
+    parser.add_argument("--snapshot-every", type=int, default=None,
+                        help=f"interval between plotted iterations (default: iterations / {N_SNAPSHOTS})")
+    args = parser.parse_args()
+    if args.iterations < 1:
+        parser.error("--iterations must be at least 1")
+    if any(step <= 0 for step in args.steps):
+        parser.error("--steps must be positive")
+    if args.snapshot_every is None:
+        args.snapshot_every = max(1, args.iterations // N_SNAPSHOTS)
+    return args
 
 
 def true_conductivity(mesh):
@@ -113,10 +121,10 @@ def main() -> None:
         print(f"  {'k':>5}  {'resíduo':>10}  {'erro':>10}")
 
         def show(record, n=args.iterations):
-            if record.k % PRINT_EVERY == 0 or record.k == n:
+            if record.k % args.snapshot_every == 0 or record.k == n:
                 print(f"  {record.k:>5}  {record.residual:>10.3e}  {record.error:>10.3e}")
 
-        result = method.run(gamma0, step, args.iterations, snapshot_every=SNAPSHOT_EVERY, callback=show)
+        result = method.run(gamma0, step, args.iterations, snapshot_every=args.snapshot_every, callback=show)
         results[step] = result
 
         if result.failure is not None:
@@ -133,22 +141,25 @@ def main() -> None:
     outputs = []
     for step, result in results.items():
         outputs.append(renderer.render_inversion_history(
-            result.residuals, result.errors, step, f"step6_convergence_lambda_{step:g}.png", floor=floor,
+            result.residuals, result.errors, step, f"step6_convergence_lambda_{step:g}_k{args.iterations}.png", floor=floor,
         ))
         snapshots = sorted(result.snapshots.items())
         if not snapshots:
             continue
-        low  = min(float(g.x.array.min()) for _, g in snapshots)
+        low = min(float(g.x.array.min()) for _, g in snapshots)
         high = max(float(g.x.array.max()) for _, g in snapshots)
         fields = [("γ⁺ (verdadeira)", gamma_true)] + [(f"γ_{k}", g) for k, g in snapshots]
         clims = [(BACKGROUND, TRUE_VALUE)] + [(low, high)] * len(snapshots)
         outputs.append(renderer.render_conductivity_sections(
-            fields, f"step6_gamma_lambda_{step:g}.png", spheres=spheres, axis="y", plane=0.0, clims=clims,
+            fields, f"step6_gamma_lambda_{step:g}_k{args.iterations}.png", spheres=spheres, axis="y", plane=0.0, clims=clims,
         ))
 
     stable = [r for r in results.values() if r.failure is None]
-    ok = ok_transfer and bool(stable) and all(r.residuals[-1] < r.residuals[0] for r in stable)
-    report.result(ok, "o método do gradiente reduziu o resíduo em todos os λ estáveis", "há verificações incorretas")
+    if not stable:
+        report.result(False, "", "o método divergiu em todos os λ testados (passo grande demais)")
+    else:
+        ok = ok_transfer and all(r.residuals[-1] < r.residuals[0] for r in stable)
+        report.result(ok, "o método do gradiente reduziu o resíduo em todos os λ estáveis", "há verificações incorretas")
     report.files(outputs)
 
 
