@@ -37,7 +37,6 @@ class PiecewiseSphereField(ABC):
         self._space = dolfinx.fem.functionspace(mesh, ("DG", 0))
 
     # Hooks
-
     @property
     @abstractmethod
     def name(self) -> str:
@@ -163,3 +162,43 @@ class DirectionalField(PiecewiseSphereField):
     @property
     def value_out(self) -> float:
         return self._config.eta_out
+
+class SpheresField(PiecewiseSphereField):
+
+    def __init__(
+        self,
+        mesh     : dolfinx.mesh.Mesh,
+        centers  : Sequence[Sequence[float]],
+        radius   : float,
+        value_in : float,
+        value_out: float,
+        name     : str = "field",
+    ) -> None:
+        if radius <= 0:
+            raise ValueError("radius must be positive")
+        super().__init__(mesh)
+        self._centers   = tuple(np.asarray(c, dtype=float) for c in centers)
+        self._radius    = float(radius)
+        self._value_in  = float(value_in)
+        self._value_out = float(value_out)
+        self._name      = name
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    @property
+    def centers(self) -> Sequence[np.ndarray]:
+        return self._centers
+
+    @property
+    def radius(self) -> float:
+        return self._radius
+
+    @property
+    def value_in(self) -> float:
+        return self._value_in
+
+    @property
+    def value_out(self) -> float:
+        return self._value_out
