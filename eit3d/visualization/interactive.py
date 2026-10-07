@@ -15,9 +15,9 @@ class InteractiveRenderer(BaseRenderer):
 
     def show(self, grid: pyvista.UnstructuredGrid, scalar: str) -> None:
         """Open the window (blocks until it is closed)."""
-        gam    = self._config.conductivity
-        plane  = float(gam.center[0])
-        clim   = [float(grid[scalar].min()), float(grid[scalar].max())]
+        gam = self._config.conductivity
+        plane = float(gam.center[0])
+        clim = [float(grid[scalar].min()), float(grid[scalar].max())]
         circle = self._section_circle(gam.center, gam.radius, axis=0, plane=plane)
 
         pl = pyvista.Plotter(shape=(1, 3), window_size=(1800, 700))

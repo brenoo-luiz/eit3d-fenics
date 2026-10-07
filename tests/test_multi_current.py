@@ -16,9 +16,9 @@ from eit3d.solvers import (  # noqa: E402
     MultiAdjointSolver, MultiDerivativeSolver, MultiForwardSolver,
 )
 
-COMM   = MPI.COMM_WORLD
+COMM = MPI.COMM_WORLD
 SOLVER = SolverConfig()
-KS     = range(1, 9)
+KS = range(1, 9)
 
 
 def integrate(expr) -> float:
@@ -28,12 +28,12 @@ def integrate(expr) -> float:
 @pytest.fixture(scope="module")
 def setup(mesh_data):
     mesh, facet_tags, V = mesh_data
-    gamma    = ConductivityField(mesh, ConductivityConfig()).build()
-    sigma    = DirectionalField(mesh, EtaConfig()).build()
-    ds_lat   = lateral_measure(mesh, facet_tags)
+    gamma = ConductivityField(mesh, ConductivityConfig()).build()
+    sigma = DirectionalField(mesh, EtaConfig()).build()
+    ds_lat = lateral_measure(mesh, facet_tags)
     currents = cosine_currents(mesh, KS)
-    u_list   = MultiForwardSolver(mesh, V, gamma, currents, ds_lat, SOLVER, COMM).solve_all()
-    w_list   = MultiDerivativeSolver(mesh, V, gamma, sigma, u_list, SOLVER, COMM).solve_all()
+    u_list = MultiForwardSolver(mesh, V, gamma, currents, ds_lat, SOLVER, COMM).solve_all()
+    w_list = MultiDerivativeSolver(mesh, V, gamma, sigma, u_list, SOLVER, COMM).solve_all()
     return dict(mesh=mesh, V=V, gamma=gamma, sigma=sigma, ds_lat=ds_lat,
                 currents=currents, u_list=u_list, w_list=w_list)
 
@@ -65,12 +65,12 @@ def test_solutions_have_zero_boundary_mean(setup):
 
 def test_derivative_first_order_consistency(setup):
     mesh, V, gamma, sigma = setup["mesh"], setup["V"], setup["gamma"], setup["sigma"]
-    ds      = ufl.Measure("ds", domain=mesh)
-    norm_w  = np.sqrt(sum(integrate(w ** 2 * ds) for w in setup["w_list"]))
+    ds = ufl.Measure("ds", domain=mesh)
+    norm_w = np.sqrt(sum(integrate(w ** 2 * ds) for w in setup["w_list"]))
     gamma_t = dolfinx.fem.Function(gamma.function_space)
-    diff    = dolfinx.fem.Function(V)
-    t_vals  = np.array([1e-2, 1e-3, 1e-4])
-    y_vals  = np.empty(len(t_vals))
+    diff = dolfinx.fem.Function(V)
+    t_vals = np.array([1e-2, 1e-3, 1e-4])
+    y_vals = np.empty(len(t_vals))
 
     for i, t in enumerate(t_vals):
         gamma_t.x.array[:] = gamma.x.array + t * sigma.x.array
@@ -90,7 +90,7 @@ def test_derivative_first_order_consistency(setup):
 @pytest.mark.parametrize("weight", ["one", "one_plus_z2"])
 def test_adjoint_relation(setup, weight):
     mesh, ds_lat = setup["mesh"], setup["ds_lat"]
-    z  = ufl.SpatialCoordinate(mesh)[2]
+    z = ufl.SpatialCoordinate(mesh)[2]
     hs = setup["currents"] if weight == "one" else [(1 + z ** 2) * g for g in setup["currents"]]
 
     adj = MultiAdjointSolver(mesh, setup["V"], setup["gamma"], setup["u_list"], hs, ds_lat, SOLVER, COMM).solve()

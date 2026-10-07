@@ -52,7 +52,7 @@ class ForwardSolver(BaseSolver):
         super().__init__(mesh, V, gamma, config, comm)
         self._g_top = g_top
         self._g_bot = g_bot
-        self._ds    = ufl.Measure("ds", domain=mesh, subdomain_data=facet_tags)
+        self._ds = ufl.Measure("ds", domain=mesh, subdomain_data=facet_tags)
 
     def _linear_form(self, v: ufl.Argument) -> ufl.Form:
         logger.info(

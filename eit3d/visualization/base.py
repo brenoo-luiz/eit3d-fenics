@@ -12,7 +12,7 @@ from eit3d.config import EITConfig
 
 class BaseRenderer:
 
-    BG          = "#1e1e2e"
+    BG = "#1e1e2e"
     WINDOW_SIZE = (1000, 1000)
 
     def __init__(self, config: EITConfig) -> None:
@@ -23,7 +23,6 @@ class BaseRenderer:
         return self._config
 
     # Geometry built from the config
-
     def _cylinder(self) -> pyvista.PolyData:
         """Cylinder surface matching the mesh domain (centered at the origin)."""
         return pyvista.Cylinder(
@@ -52,11 +51,11 @@ class BaseRenderer:
             return pyvista.PolyData()
         r_cut = np.sqrt(radius**2 - dist**2)
         theta = np.linspace(0.0, 2.0 * np.pi, 200)
-        u, v  = [i for i in range(3) if i != axis]
-        pts   = np.zeros((200, 3))
+        u, v = [i for i in range(3) if i != axis]
+        pts = np.zeros((200, 3))
         pts[:, axis] = plane
-        pts[:, u]    = center[u] + r_cut * np.cos(theta)
-        pts[:, v]    = center[v] + r_cut * np.sin(theta)
+        pts[:, u] = center[u] + r_cut * np.cos(theta)
+        pts[:, v] = center[v] + r_cut * np.sin(theta)
         return pyvista.Spline(pts, 200)
 
     def _camera_distance(self) -> float:

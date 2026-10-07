@@ -44,14 +44,14 @@ class CylinderMesh:
         self,
         config   : MeshConfig,
         comm     : MPI.Comm = MPI.COMM_WORLD,
-        force    : bool     = False,
-        cache_dir: Path     = CACHE_DIR,
+        force    : bool = False,
+        cache_dir: Path = CACHE_DIR,
     ) -> None:
-        self._config    = config
-        self._comm      = comm
-        self._force     = force
+        self._config = config
+        self._comm = comm
+        self._force = force
         self._mesh_file = mesh_cache_path(config, cache_dir)
-        self._mesh       : Optional[dolfinx.mesh.Mesh]     = None
+        self._mesh       : Optional[dolfinx.mesh.Mesh] = None
         self._facet_tags : Optional[dolfinx.mesh.MeshTags] = None
         self._mesh_file.parent.mkdir(parents=True, exist_ok=True)
 
@@ -130,8 +130,8 @@ class CylinderMesh:
             gmsh.model.mesh.optimize("Netgen")
             gmsh.model.mesh.optimize("Relocate3D")
 
-            mesh_data        = gmshio.model_to_mesh(gmsh.model, self._comm, 0, gdim=3)
-            self._mesh       = mesh_data.mesh
+            mesh_data = gmshio.model_to_mesh(gmsh.model, self._comm, 0, gdim=3)
+            self._mesh = mesh_data.mesh
             self._facet_tags = mesh_data.facet_tags
         finally:
             gmsh.finalize()

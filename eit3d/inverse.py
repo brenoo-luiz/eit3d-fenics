@@ -24,28 +24,28 @@ class NonPositiveConductivity(RuntimeError):
     def __init__(self, iteration: int, minimum: float) -> None:
         super().__init__(f"conductivity became non-positive at iteration {iteration} (min {minimum:.3e})")
         self.iteration = iteration
-        self.minimum   = minimum
+        self.minimum = minimum
 
 
 def transfer(u_from: dolfinx.fem.Function, V_to: dolfinx.fem.FunctionSpace,
             padding: float = TRANSFER_PADDING) -> dolfinx.fem.Function:
     mesh_to = V_to.mesh
     n_cells = mesh_to.topology.index_map(mesh_to.topology.dim).size_local
-    cells   = np.arange(n_cells, dtype=np.int32)
-    data    = dolfinx.fem.create_interpolation_data(V_to, u_from.function_space, cells, padding=padding)
-    u_to    = dolfinx.fem.Function(V_to)
+    cells = np.arange(n_cells, dtype=np.int32)
+    data = dolfinx.fem.create_interpolation_data(V_to, u_from.function_space, cells, padding=padding)
+    u_to = dolfinx.fem.Function(V_to)
     u_to.interpolate_nonmatching(u_from, cells, data)
     u_to.x.scatter_forward()
     return u_to
 
 
 def project_dg0(f: dolfinx.fem.Function, V0: dolfinx.fem.FunctionSpace) -> dolfinx.fem.Function:
-    q   = ufl.TestFunction(V0)
+    q = ufl.TestFunction(V0)
     rhs = dolfinx.fem.assemble_vector(dolfinx.fem.form(f * q * ufl.dx))
     vol = dolfinx.fem.assemble_vector(dolfinx.fem.form(q * ufl.dx))
     for vec in (rhs, vol):
         vec.scatter_reverse(dolfinx.la.InsertMode.add)
-    n   = V0.dofmap.index_map.size_local
+    n = V0.dofmap.index_map.size_local
     out = dolfinx.fem.Function(V0)
     out.x.array[:n] = rhs.array[:n] / vol.array[:n]
     out.x.scatter_forward()
@@ -62,10 +62,10 @@ class IterationRecord:
 @dataclass
 class InversionResult:
     step     : float
-    history  : List[IterationRecord]                  = field(default_factory=list)
-    snapshots: Dict[int, dolfinx.fem.Function]       = field(default_factory=dict)
-    gamma    : Optional[dolfinx.fem.Function]        = None
-    failure  : Optional[NonPositiveConductivity]     = None
+    history  : List[IterationRecord] = field(default_factory=list)
+    snapshots: Dict[int, dolfinx.fem.Function] = field(default_factory=dict)
+    gamma    : Optional[dolfinx.fem.Function] = None
+    failure  : Optional[NonPositiveConductivity] = None
 
     @property
     def residuals(self) -> np.ndarray:
@@ -91,14 +91,14 @@ class GradientMethod:
     ) -> None:
         if len(currents) != len(data):
             raise ValueError("currents and data must have the same length")
-        self._mesh       = mesh
-        self._V          = V
-        self._currents   = list(currents)
-        self._ds_g       = ds_g
-        self._config     = config
-        self._comm       = comm
-        self._ds         = ufl.Measure("ds", domain=mesh)
-        self._data       = [self._center(d) for d in data]
+        self._mesh = mesh
+        self._V = V
+        self._currents = list(currents)
+        self._ds_g = ds_g
+        self._config = config
+        self._comm = comm
+        self._ds = ufl.Measure("ds", domain=mesh)
+        self._data = [self._center(d) for d in data]
         self._gamma_true = gamma_true
         self._norm_true  = None if gamma_true is None else np.sqrt(self._integrate(gamma_true ** 2 * ufl.dx))
 
@@ -114,7 +114,7 @@ class GradientMethod:
         return 0.5 * self.residual(self.forward(gamma)) ** 2
 
     def gradient(self, gamma: dolfinx.fem.Function, u_list: Sequence[dolfinx.fem.Function]) -> dolfinx.fem.Function:
-        hs  = [u - d for u, d in zip(u_list, self._data)]
+        hs = [u - d for u, d in zip(u_list, self._data)]
         adj = MultiAdjointSolver(
             self._mesh, self._V, gamma, u_list, hs, self._ds, self._config, self._comm,
         ).solve()
@@ -136,7 +136,7 @@ class GradientMethod:
         if step <= 0:
             raise ValueError("step must be positive")
         result = InversionResult(step=step)
-        gamma  = gamma0.copy()
+        gamma = gamma0.copy()
 
         for k in range(n_iter + 1):
             u_list = self.forward(gamma)
@@ -162,9 +162,9 @@ class GradientMethod:
         return result
 
     def _center(self, d: dolfinx.fem.Function) -> dolfinx.fem.Function:
-        one  = dolfinx.fem.Constant(self._mesh, dolfinx.default_scalar_type(1.0))
+        one = dolfinx.fem.Constant(self._mesh, dolfinx.default_scalar_type(1.0))
         mean = self._integrate(d * self._ds) / self._integrate(one * self._ds)
-        out  = d.copy()
+        out = d.copy()
         out.x.array[:] -= mean
         out.x.scatter_forward()
         return out

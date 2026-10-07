@@ -23,15 +23,15 @@ from eit3d.currents import cosine_currents, lateral_measure  # noqa: E402
 from eit3d.solvers import MultiAdjointSolver, MultiDerivativeSolver, MultiForwardSolver  # noqa: E402
 from eit3d.visualization.static import StaticRenderer, SurfacePanel  # noqa: E402
 
-KS             = range(1, 9)
-MESH           = MeshConfig(size_max=0.1, size_min=0.05)
-CONSISTENCY    = ConsistencyTestConfig(n_iter=70, base=0.8)
+KS = range(1, 9)
+MESH = MeshConfig(size_max=0.1, size_min=0.05)
+CONSISTENCY = ConsistencyTestConfig(n_iter=70, base=0.8)
 PROGRESS_EVERY = 10
-SLOPE_RANGE    = (0.95, 1.05)
-FIT_T_MAX      = 1e-2
-FIT_NOISE_GAP  = 30.0
-TOL_A          = 1e-6
-TOL_REL        = 1e-2
+SLOPE_RANGE = (0.95, 1.05)
+FIT_T_MAX = 1e-2
+FIT_NOISE_GAP = 30.0
+TOL_A = 1e-6
+TOL_REL = 1e-2
 
 
 def fit_window(t_vals: np.ndarray, idx_min: int) -> np.ndarray:
@@ -45,33 +45,33 @@ def main() -> None:
     logging.basicConfig(level=logging.WARNING, format="%(message)s")
 
     comm = MPI.COMM_WORLD
-    cfg  = EITConfig(mesh=MESH, consistency=CONSISTENCY)
+    cfg = EITConfig(mesh=MESH, consistency=CONSISTENCY)
     pipe = EITPipeline(cfg)
-    n_g  = len(KS)
+    n_g = len(KS)
 
     report.title(f"TESTE COM {n_g} CORRENTES  g_k = cos(kθ)")
     report.mesh(pipe)
     report.info("Correntes", f"cos(kθ) na lateral, 0 nas bases, k = {KS[0]}, ..., {KS[-1]}")
 
     mesh, facet_tags = pipe.get_mesh()
-    V      = pipe.get_function_space()
-    ds     = ufl.Measure("ds", domain=mesh)
+    V = pipe.get_function_space()
+    ds = ufl.Measure("ds", domain=mesh)
     ds_lat = lateral_measure(mesh, facet_tags)
 
     def integrate(expr) -> float:
         return comm.allreduce(dolfinx.fem.assemble_scalar(dolfinx.fem.form(expr)), op=MPI.SUM)
 
     currents = cosine_currents(mesh, KS)
-    gamma    = pipe.build_gamma()
-    sigma    = pipe.build_eta()
+    gamma = pipe.build_gamma()
+    sigma = pipe.build_eta()
 
     report.section("Conjunto de correntes G = {g_1, ..., g_8}")
-    int_g   = max(abs(integrate(g * ds_lat)) for g in currents)
+    int_g = max(abs(integrate(g * ds_lat)) for g in currents)
     scale_g = min(integrate(abs(g) * ds_lat) for g in currents)
-    gram    = np.array([[integrate(gi * gj * ds_lat) for gj in currents] for gi in currents])
-    norms   = np.sqrt(np.diag(gram))
-    off     = np.abs(gram / np.outer(norms, norms) - np.eye(n_g)).max()
-    rank    = int(np.linalg.matrix_rank(gram))
+    gram = np.array([[integrate(gi * gj * ds_lat) for gj in currents] for gi in currents])
+    norms = np.sqrt(np.diag(gram))
+    off = np.abs(gram / np.outer(norms, norms) - np.eye(n_g)).max()
+    rank = int(np.linalg.matrix_rank(gram))
     ok_g = all([
         report.check("Maior |∫g_k| na fronteira", int_g, int_g < TOL_REL * scale_g, ideal="~0"),
         report.check("Posto da matriz de Gram", rank, rank == n_g, ideal=str(n_g), fmt="d"),
@@ -86,18 +86,18 @@ def main() -> None:
     w_list = MultiDerivativeSolver(mesh, V, gamma, sigma, u_list, cfg.solver, comm).solve_all()
     ok_w = report.check_zero("Maior |∫ω_k| na fronteira", max(abs(integrate(w * ds)) for w in w_list))
 
-    base   = cfg.consistency.base
+    base = cfg.consistency.base
     n_iter = cfg.consistency.n_iter
     report.section(f"Teste de consistência da derivada: {n_iter} perturbações γ + tσ, com t = {base:g}ⁿ")
     print("  y = erro das 8 derivadas numéricas em relação a ω (norma do conjunto)")
     print(f"  {'n':>5}  {'t':>9}  {'y':>9}")
 
-    gamma_n   = dolfinx.fem.Function(gamma.function_space)
-    diffs     = [dolfinx.fem.Function(V) for _ in KS]
+    gamma_n = dolfinx.fem.Function(gamma.function_space)
+    diffs = [dolfinx.fem.Function(V) for _ in KS]
     err_forms = [dolfinx.fem.form((d - w) ** 2 * ds) for d, w in zip(diffs, w_list)]
-    norm_w    = np.sqrt(sum(integrate(w ** 2 * ds) for w in w_list))
-    t_vals    = cfg.consistency.t_values()
-    y_vals    = np.empty(len(t_vals))
+    norm_w = np.sqrt(sum(integrate(w ** 2 * ds) for w in w_list))
+    t_vals = cfg.consistency.t_values()
+    y_vals = np.empty(len(t_vals))
 
     for k, t_n in enumerate(t_vals):
         gamma_n.x.array[:] = gamma.x.array + t_n * sigma.x.array
@@ -113,12 +113,12 @@ def main() -> None:
         if k % PROGRESS_EVERY == 0 or k == n_iter - 1:
             print(f"  {k:>5}  {t_n:>9.1e}  {y_vals[k]:>9.1e}")
 
-    idx_min  = int(np.argmin(y_vals))
-    log_t    = np.log10(t_vals)
-    log_y    = np.log10(y_vals)
-    window   = fit_window(t_vals, idx_min)
-    coeffs   = np.polyfit(log_t[window], log_y[window], 1)
-    slope    = coeffs[0]
+    idx_min = int(np.argmin(y_vals))
+    log_t = np.log10(t_vals)
+    log_y = np.log10(y_vals)
+    window = fit_window(t_vals, idx_min)
+    coeffs = np.polyfit(log_t[window], log_y[window], 1)
+    slope = coeffs[0]
     fit_line = np.polyval(coeffs, log_t[:window[-1] + 1])
 
     report.info("Menor erro", f"y = {y_vals[idx_min]:.1e}  (em n = {idx_min}, t = {t_vals[idx_min]:.1e})")
@@ -130,22 +130,22 @@ def main() -> None:
 
     report.section("Adjunto: F'_G(γ)*h = Σ -∇u_k·∇ψ_k,  com h_k = g_k")
     adjoint = MultiAdjointSolver(mesh, V, gamma, u_list, currents, ds_lat, cfg.solver, comm)
-    adj     = adjoint.solve()
-    ok_psi  = report.check_zero("Maior |∫ψ_k| na fronteira", max(abs(integrate(p * ds)) for p in adjoint.psis))
+    adj = adjoint.solve()
+    ok_psi = report.check_zero("Maior |∫ψ_k| na fronteira", max(abs(integrate(p * ds)) for p in adjoint.psis))
 
     lhs = integrate(adj * sigma * ufl.dx)
     rhs = sum(integrate(h * w * ds_lat) for h, w in zip(currents, w_list))
-    a   = abs(lhs - rhs) / abs(rhs)
+    a = abs(lhs - rhs) / abs(rhs)
     report.info("⟨F'_G(γ)*h, σ⟩", f"{lhs: .8e}")
     report.info("⟨h, F'_G(γ)σ⟩", f"{rhs: .8e}")
     ok_a = report.check("a", a, a < TOL_A)
 
-    z      = ufl.SpatialCoordinate(mesh)[2]
-    h_ext  = [(1 + z ** 2) * g for g in currents]
-    adj_x  = MultiAdjointSolver(mesh, V, gamma, u_list, h_ext, ds_lat, cfg.solver, comm).solve()
-    lhs_x  = integrate(adj_x * sigma * ufl.dx)
-    rhs_x  = sum(integrate(h * w * ds_lat) for h, w in zip(h_ext, w_list))
-    a_x    = abs(lhs_x - rhs_x) / abs(rhs_x)
+    z = ufl.SpatialCoordinate(mesh)[2]
+    h_ext = [(1 + z ** 2) * g for g in currents]
+    adj_x = MultiAdjointSolver(mesh, V, gamma, u_list, h_ext, ds_lat, cfg.solver, comm).solve()
+    lhs_x = integrate(adj_x * sigma * ufl.dx)
+    rhs_x = sum(integrate(h * w * ds_lat) for h, w in zip(h_ext, w_list))
+    a_x = abs(lhs_x - rhs_x) / abs(rhs_x)
     report.section("Verificação extra  (h_k = (1 + z²) g_k, com ψ_k diferente de u_k)")
     ok_x = report.check("a", a_x, a_x < TOL_A)
 
@@ -155,9 +155,9 @@ def main() -> None:
 
     renderer = StaticRenderer(cfg, OUTPUTS_DIR)
     topo, ct, geo = dolfinx.plot.vtk_mesh(V)
-    coords  = V.tabulate_dof_coordinates()
+    coords = V.tabulate_dof_coordinates()
     on_base = np.abs(coords[:, 2]) >= cfg.mesh.height / 2 - 1e-8
-    theta   = np.arctan2(coords[:, 1], coords[:, 0])
+    theta = np.arctan2(coords[:, 1], coords[:, 0])
 
     def current_panel(k: int) -> SurfacePanel:
         values = np.cos(k * theta)

@@ -35,7 +35,7 @@ class EITPipeline:
         force_mesh: bool     = False,
     ) -> None:
         self._config = config
-        self._comm   = comm
+        self._comm = comm
 
         # Cheap
         self._cylinder = CylinderMesh(
@@ -45,8 +45,8 @@ class EITPipeline:
         )
         OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)
 
-        self._mesh       : Optional[dolfinx.mesh.Mesh]         = None
-        self._facet_tags : Optional[dolfinx.mesh.MeshTags]     = None
+        self._mesh       : Optional[dolfinx.mesh.Mesh] = None
+        self._facet_tags : Optional[dolfinx.mesh.MeshTags] = None
         self._V          : Optional[dolfinx.fem.FunctionSpace] = None
 
     @property
@@ -63,7 +63,7 @@ class EITPipeline:
         """Return the P2 Lagrange function space."""
         if self._V is None:
             mesh, _ = self.get_mesh()
-            el      = basix.ufl.element(
+            el = basix.ufl.element(
                 "Lagrange", "tetrahedron", degree=2, shape=()
             )
             self._V = dolfinx.fem.functionspace(mesh, el)
@@ -82,7 +82,7 @@ class EITPipeline:
 
     def solve_forward(
         self,
-        pattern: int                            = 0,
+        pattern: int = 0,
         gamma  : Optional[dolfinx.fem.Function] = None,
     ) -> dolfinx.fem.Function:
         """Solve the EIT forward problem for a current pattern."""
@@ -90,8 +90,8 @@ class EITPipeline:
             gamma = self.build_gamma()
 
         mesh, facet_tags = self.get_mesh()
-        V                = self.get_function_space()
-        g_top, g_bot     = self._config.current.patterns[pattern]
+        V = self.get_function_space()
+        g_top, g_bot = self._config.current.patterns[pattern]
 
         return ForwardSolver(
             mesh=mesh, facet_tags=facet_tags,
@@ -113,7 +113,7 @@ class EITPipeline:
             eta = self.build_eta()
 
         mesh, _ = self.get_mesh()
-        V       = self.get_function_space()
+        V = self.get_function_space()
 
         return DerivativeSolver(
             mesh=mesh, V=V,

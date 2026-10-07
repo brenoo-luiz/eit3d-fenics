@@ -22,9 +22,9 @@ from eit3d.visualization.static import StaticRenderer
 def main() -> None:
     logging.basicConfig(level=logging.WARNING, format="%(message)s")
 
-    cfg  = EITConfig()
+    cfg = EITConfig()
     pipe = EITPipeline(cfg)
-    gam  = cfg.conductivity
+    gam = cfg.conductivity
     g_top, g_bot = cfg.current.patterns[0]
 
     report.title("PROBLEMA DIRETO  (encontrar o potencial u)")
@@ -33,10 +33,10 @@ def main() -> None:
     report.info("Corrente g", f"{g_top:+g} no topo, {g_bot:+g} na base, 0 na lateral")
 
     gamma = pipe.build_gamma()
-    u_h   = pipe.solve_forward(pattern=0, gamma=gamma)
+    u_h = pipe.solve_forward(pattern=0, gamma=gamma)
 
     mesh, _ = pipe.get_mesh()
-    ds    = ufl.Measure("ds", domain=mesh)
+    ds = ufl.Measure("ds", domain=mesh)
     int_u = MPI.COMM_WORLD.allreduce(dolfinx.fem.assemble_scalar(dolfinx.fem.form(u_h * ds)), op=MPI.SUM)
 
     report.section("Solução")

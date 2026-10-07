@@ -27,5 +27,5 @@ def mesh_data(tmp_path_factory):
     )
     mesh, facet_tags = cylinder.get()
     el = basix.ufl.element("Lagrange", "tetrahedron", degree=2, shape=())
-    V  = dolfinx.fem.functionspace(mesh, el)
+    V = dolfinx.fem.functionspace(mesh, el)
     return mesh, facet_tags, V

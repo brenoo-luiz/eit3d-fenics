@@ -19,7 +19,7 @@ from eit3d.visualization.static import StaticRenderer
 def main() -> None:
     logging.basicConfig(level=logging.WARNING, format="%(message)s")
 
-    cfg  = EITConfig()
+    cfg = EITConfig()
     pipe = EITPipeline(cfg)
 
     report.title("MALHA DO CILINDRO")

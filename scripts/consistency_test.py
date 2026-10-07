@@ -24,7 +24,7 @@ def main() -> None:
     logging.basicConfig(level=logging.WARNING, format="%(message)s")
 
     comm = MPI.COMM_WORLD
-    cfg  = EITConfig()
+    cfg = EITConfig()
     pipe = EITPipeline(cfg)
 
     report.title("TESTE COM SOLUÇÃO EXATA  u = x² - y²")
@@ -33,28 +33,28 @@ def main() -> None:
     report.info("Corrente g", "derivada normal da solução exata")
 
     mesh, _ = pipe.get_mesh()
-    V       = pipe.get_function_space()
-    ds      = ufl.Measure("ds", domain=mesh)
-    x       = ufl.SpatialCoordinate(mesh)
-    n       = ufl.FacetNormal(mesh)
-    one     = dolfinx.fem.Constant(mesh, PETSc.ScalarType(1.0))
+    V = pipe.get_function_space()
+    ds = ufl.Measure("ds", domain=mesh)
+    x = ufl.SpatialCoordinate(mesh)
+    n = ufl.FacetNormal(mesh)
+    one = dolfinx.fem.Constant(mesh, PETSc.ScalarType(1.0))
 
     def integrate(expr) -> float:
         return comm.allreduce(dolfinx.fem.assemble_scalar(dolfinx.fem.form(expr)), op=MPI.SUM)
 
     u_exact_ufl = x[0]**2 - x[1]**2
-    g           = ufl.dot(ufl.grad(u_exact_ufl), n)
-    c_val       = integrate(u_exact_ufl * ds) / integrate(one * ds)
+    g = ufl.dot(ufl.grad(u_exact_ufl), n)
+    c_val = integrate(u_exact_ufl * ds) / integrate(one * ds)
 
     u_exact = dolfinx.fem.Function(V)
     u_exact.interpolate(lambda xp: xp[0]**2 - xp[1]**2 - c_val)
     u_exact.x.scatter_forward()
 
-    u_h  = NeumannSolver(mesh=mesh, V=V, gamma=one, g=g, config=cfg.solver, comm=comm).solve()
+    u_h = NeumannSolver(mesh=mesh, V=V, gamma=one, g=g, config=cfg.solver, comm=comm).solve()
     diff = u_h - u_exact
 
-    err_L2   = np.sqrt(integrate(diff**2 * ufl.dx)) / np.sqrt(integrate(u_exact**2 * ufl.dx))
-    err_H1   = np.sqrt(integrate(ufl.inner(ufl.grad(diff), ufl.grad(diff)) * ufl.dx)) \
+    err_L2 = np.sqrt(integrate(diff**2 * ufl.dx)) / np.sqrt(integrate(u_exact**2 * ufl.dx))
+    err_H1 = np.sqrt(integrate(ufl.inner(ufl.grad(diff), ufl.grad(diff)) * ufl.dx)) \
         / np.sqrt(integrate(ufl.inner(ufl.grad(u_exact), ufl.grad(u_exact)) * ufl.dx))
     err_flux = np.sqrt(integrate((ufl.dot(ufl.grad(u_h), n) - g)**2 * ds)) / np.sqrt(integrate(g**2 * ds))
 

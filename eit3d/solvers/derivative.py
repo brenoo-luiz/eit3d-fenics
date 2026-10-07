@@ -49,7 +49,7 @@ class DerivativeSolver(BaseSolver):
         comm   : MPI.Comm = MPI.COMM_WORLD,
     ) -> None:
         super().__init__(mesh, V, gamma, config, comm)
-        self._eta     = eta
+        self._eta = eta
         self._u_gamma = u_gamma
 
     def _linear_form(self, v: ufl.Argument) -> ufl.Form:

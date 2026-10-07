@@ -27,18 +27,18 @@ from eit3d.fields import SpheresField  # noqa: E402
 from eit3d.inverse import GradientMethod, data_from, transfer  # noqa: E402
 from eit3d.visualization.static import StaticRenderer  # noqa: E402
 
-FINE_MESH      = MeshConfig(size_max=0.05, size_min=0.02)
-COARSE_MESH    = MeshConfig(size_max=0.1, size_min=0.05)
-KS             = range(1, 9)
-TRUE_CENTERS   = ((0.4, 0.0, 0.4), (-0.4, 0.0, -0.4))
-TRUE_RADIUS    = 0.25
-TRUE_VALUE     = 10.0
-BACKGROUND     = 1.0
-STEPS          = (1.0, 0.1, 0.01)
-N_ITER         = 100
+FINE_MESH = MeshConfig(size_max=0.05, size_min=0.02)
+COARSE_MESH = MeshConfig(size_max=0.1, size_min=0.05)
+KS = range(1, 9)
+TRUE_CENTERS = ((0.4, 0.0, 0.4), (-0.4, 0.0, -0.4))
+TRUE_RADIUS = 0.25
+TRUE_VALUE = 10.0
+BACKGROUND = 1.0
+STEPS = (1.0, 0.1, 0.01)
+N_ITER = 100
 SNAPSHOT_EVERY = 10
-PRINT_EVERY    = 10
-TOL_TRANSFER   = 1e-2
+PRINT_EVERY = 10
+TOL_TRANSFER = 1e-2
 
 
 def parse_args():
@@ -83,12 +83,12 @@ def main() -> None:
     report.section("Dados ũ = F_G(γ⁺)  (malha fina)")
     data_fine, norm_fine = generate_data(EITConfig(mesh=FINE_MESH), comm)
 
-    cfg  = EITConfig(mesh=COARSE_MESH)
+    cfg = EITConfig(mesh=COARSE_MESH)
     pipe = EITPipeline(cfg)
     report.section("Problema inverso  (malha grossa)")
     report.mesh(pipe)
     mesh, facet_tags = pipe.get_mesh()
-    V  = pipe.get_function_space()
+    V = pipe.get_function_space()
     ds = ufl.Measure("ds", domain=mesh)
 
     data = [transfer(d, V) for d in data_fine]
@@ -96,17 +96,17 @@ def main() -> None:
     gc.collect()
 
     norm_coarse = boundary_norm(data, ds, comm)
-    diff_norm   = abs(norm_coarse - norm_fine) / norm_fine
+    diff_norm = abs(norm_coarse - norm_fine) / norm_fine
     ok_transfer = report.check("Transferência dos dados entre malhas", diff_norm, diff_norm < TOL_TRANSFER, ideal="~0")
 
-    currents   = cosine_currents(mesh, KS)
+    currents = cosine_currents(mesh, KS)
     gamma_true = true_conductivity(mesh)
-    method     = GradientMethod(mesh, V, currents, lateral_measure(mesh, facet_tags), data, cfg.solver, gamma_true, comm)
+    method = GradientMethod(mesh, V, currents, lateral_measure(mesh, facet_tags), data, cfg.solver, gamma_true, comm)
 
     floor = method.residual(method.forward(gamma_true))
-    report.info("Resíduo de γ⁺ na malha grossa", f"{floor:.2e}  (limite esperado para o resíduo)")
+    report.info("Resíduo de γ⁺ na malha grossa", f"{floor:.2e}  (referência para o resíduo)")
 
-    gamma0  = SpheresField(mesh, (), TRUE_RADIUS, BACKGROUND, BACKGROUND, name="gamma0").build()
+    gamma0 = SpheresField(mesh, (), TRUE_RADIUS, BACKGROUND, BACKGROUND, name="gamma0").build()
     results = {}
     for step in args.steps:
         report.section(f"λ = {step:g}  ({args.iterations} iterações, γ₀ ≡ {BACKGROUND:g})")
@@ -129,14 +129,21 @@ def main() -> None:
                     f"  (verdadeira: {BACKGROUND:g} a {TRUE_VALUE:g})")
 
     renderer = StaticRenderer(cfg, OUTPUTS_DIR)
-    spheres  = [(c, TRUE_RADIUS) for c in TRUE_CENTERS]
-    outputs  = [renderer.render_convergence(
-        {f"λ = {s:g}": (r.residuals, r.errors) for s, r in results.items()}, "step6_convergence.png",
-    )]
+    spheres = [(c, TRUE_RADIUS) for c in TRUE_CENTERS]
+    outputs = []
     for step, result in results.items():
-        fields = [("γ⁺ (verdadeira)", gamma_true)] + [(f"γ_{k}", g) for k, g in sorted(result.snapshots.items())]
+        outputs.append(renderer.render_inversion_history(
+            result.residuals, result.errors, step, f"step6_convergence_lambda_{step:g}.png", floor=floor,
+        ))
+        snapshots = sorted(result.snapshots.items())
+        if not snapshots:
+            continue
+        low  = min(float(g.x.array.min()) for _, g in snapshots)
+        high = max(float(g.x.array.max()) for _, g in snapshots)
+        fields = [("γ⁺ (verdadeira)", gamma_true)] + [(f"γ_{k}", g) for k, g in snapshots]
+        clims = [(BACKGROUND, TRUE_VALUE)] + [(low, high)] * len(snapshots)
         outputs.append(renderer.render_conductivity_sections(
-            fields, f"step6_gamma_lambda_{step:g}.png", spheres=spheres, axis="y", plane=0.0,
+            fields, f"step6_gamma_lambda_{step:g}.png", spheres=spheres, axis="y", plane=0.0, clims=clims,
         ))
 
     stable = [r for r in results.values() if r.failure is None]

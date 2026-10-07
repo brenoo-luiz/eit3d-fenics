@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Iterable
 
 TOL_ZERO = 1e-10
-LABEL    = 36
+LABEL = 36
 
 _columns_pending = False
 

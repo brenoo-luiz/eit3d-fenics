@@ -39,7 +39,7 @@ SOLVER = SolverConfig()
 def fields(mesh_data):
     mesh, _, _ = mesh_data
     gamma = ConductivityField(mesh, ConductivityConfig()).build()
-    eta   = DirectionalField(mesh, EtaConfig()).build()
+    eta = DirectionalField(mesh, EtaConfig()).build()
     return gamma, eta
 
 
@@ -65,7 +65,7 @@ def integrate(expr) -> float:
 
 
 def boundary_mean(u, mesh) -> float:
-    ds  = ufl.Measure("ds", domain=mesh)
+    ds = ufl.Measure("ds", domain=mesh)
     one = dolfinx.fem.Constant(mesh, dolfinx.default_scalar_type(1.0))
     return integrate(u * ds) / integrate(one * ds)
 
@@ -74,8 +74,8 @@ def boundary_mean(u, mesh) -> float:
 def test_manufactured_solution(mesh_data):
     """Pure Neumann problem with u = x^2 - y^2 is solved exactly by P2."""
     mesh, _, V = mesh_data
-    x  = ufl.SpatialCoordinate(mesh)
-    n  = ufl.FacetNormal(mesh)
+    x = ufl.SpatialCoordinate(mesh)
+    n = ufl.FacetNormal(mesh)
     ue = x[0]**2 - x[1]**2
     one = dolfinx.fem.Constant(mesh, dolfinx.default_scalar_type(1.0))
 
@@ -83,8 +83,8 @@ def test_manufactured_solution(mesh_data):
         mesh, V, gamma=one, g=ufl.dot(ufl.grad(ue), n), config=SOLVER, comm=COMM,
     ).solve()
 
-    ds  = ufl.Measure("ds", domain=mesh)
-    c   = integrate(ue * ds) / integrate(one * ds)
+    ds = ufl.Measure("ds", domain=mesh)
+    c = integrate(ue * ds) / integrate(one * ds)
     err = np.sqrt(integrate((u_h - (ue - c))**2 * ufl.dx))
     ref = np.sqrt(integrate((ue - c)**2 * ufl.dx))
     assert err / ref < 1e-8
@@ -118,10 +118,10 @@ def test_derivative_first_order_consistency(mesh_data, fields, u_gamma, omega):
     ds = ufl.Measure("ds", domain=mesh)
 
     gamma_t = dolfinx.fem.Function(gamma.function_space)
-    diff    = dolfinx.fem.Function(V)
+    diff = dolfinx.fem.Function(V)
     norm_om = np.sqrt(integrate(omega**2 * ds))
-    t_vals  = np.array([1e-2, 1e-3, 1e-4])
-    y_vals  = np.empty(len(t_vals))
+    t_vals = np.array([1e-2, 1e-3, 1e-4])
+    y_vals = np.empty(len(t_vals))
 
     for k, t in enumerate(t_vals):
         gamma_t.x.array[:] = gamma.x.array + t * eta.x.array
@@ -139,9 +139,9 @@ def test_adjoint_relation(mesh_data, fields, u_gamma, omega):
     """<F'(gamma)* h, sigma>_Omega = <h, F'(gamma) sigma>_dOmega, h without symmetry."""
     mesh, _, V = mesh_data
     gamma, sigma = fields
-    x  = ufl.SpatialCoordinate(mesh)
+    x = ufl.SpatialCoordinate(mesh)
     ds = ufl.Measure("ds", domain=mesh)
-    h  = x[2]**3 + x[0] * x[2]
+    h = x[2]**3 + x[0] * x[2]
 
     adj = AdjointSolver(mesh, V, gamma, u_gamma, h, SOLVER, COMM).solve()
 
@@ -157,14 +157,14 @@ def test_adjoint_relation_caps_lateral_h(mesh_data, fields, u_gamma, omega):
     """
     mesh, _, V = mesh_data
     gamma, sigma = fields
-    z  = ufl.SpatialCoordinate(mesh)[2]
+    z = ufl.SpatialCoordinate(mesh)[2]
     ds = ufl.Measure("ds", domain=mesh)
-    h  = ufl.conditional(ufl.gt(abs(z), 1.0 - 1e-8), 2.0, -1.0)
+    h = ufl.conditional(ufl.gt(abs(z), 1.0 - 1e-8), 2.0, -1.0)
 
     adj = AdjointSolver(mesh, V, gamma, u_gamma, h, SOLVER, COMM).solve()
 
-    lhs   = integrate(adj * sigma * ufl.dx)
-    rhs   = integrate(h * omega * ds)
+    lhs = integrate(adj * sigma * ufl.dx)
+    rhs = integrate(h * omega * ds)
     scale = np.sqrt(integrate(adj**2 * ufl.dx)) * np.sqrt(integrate(sigma**2 * ufl.dx))
     assert abs(lhs - rhs) / scale < 1e-9
 

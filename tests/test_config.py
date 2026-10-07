@@ -101,7 +101,7 @@ class TestSolverConfig:
 class TestConsistencyTestConfig:
     def test_t_values(self):
         cfg = ConsistencyTestConfig(n_iter=5, base=0.9)
-        t   = cfg.t_values()
+        t = cfg.t_values()
         assert len(t) == 5
         assert np.isclose(t[0], 1.0)
         assert np.isclose(t[1], 0.9)

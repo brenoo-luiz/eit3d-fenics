@@ -30,7 +30,7 @@ class MultiForwardSolver(BaseSolver):
     ) -> None:
         super().__init__(mesh, V, gamma, config, comm)
         self._currents = list(currents)
-        self._ds_g     = ds_g
+        self._ds_g = ds_g
 
     def _linear_forms(self, v: ufl.Argument) -> List[ufl.Form]:
         return [self._centered_flux(g, self._ds_g, v) for g in self._currents]
@@ -52,7 +52,7 @@ class MultiDerivativeSolver(BaseSolver):
         comm    : MPI.Comm = MPI.COMM_WORLD,
     ) -> None:
         super().__init__(mesh, V, gamma, config, comm)
-        self._eta      = eta
+        self._eta = eta
         self._u_gammas = list(u_gammas)
 
     def _linear_forms(self, v: ufl.Argument) -> List[ufl.Form]:
@@ -82,8 +82,8 @@ class MultiAdjointSolver(BaseSolver):
             raise ValueError("u_gammas and hs must have the same length")
         super().__init__(mesh, V, gamma, config, comm)
         self._u_gammas = list(u_gammas)
-        self._hs       = list(hs)
-        self._ds_h     = ds_h
+        self._hs = list(hs)
+        self._ds_h = ds_h
         self._psis     : Optional[List[dolfinx.fem.Function]] = None
 
     @property
@@ -95,7 +95,7 @@ class MultiAdjointSolver(BaseSolver):
     def solve(self) -> dolfinx.fem.Function:
         self._psis = self.solve_all()
 
-        W    = dolfinx.fem.functionspace(self._mesh, ("DG", 2))
+        W = dolfinx.fem.functionspace(self._mesh, ("DG", 2))
         expr = dolfinx.fem.Expression(
             -sum(ufl.inner(ufl.grad(u), ufl.grad(psi)) for u, psi in zip(self._u_gammas, self._psis)),
             W.element.interpolation_points,

@@ -12,7 +12,7 @@ def test_sphere_indicator():
     from eit3d.fields import sphere_indicator
 
     points = np.array([[0.0, 0.0, 0.0], [0.5, 0.0, 0.0], [1.0, 0.0, 0.0]])
-    mask   = sphere_indicator(points, np.array([0.0, 0.0, 0.0]), 0.6)
+    mask = sphere_indicator(points, np.array([0.0, 0.0, 0.0]), 0.6)
     assert mask.tolist() == [True, True, False]
 
 
@@ -32,7 +32,7 @@ def test_conductivity_values(mesh_data):
     from eit3d.fields import ConductivityField
 
     mesh, _, _ = mesh_data
-    cfg   = ConductivityConfig()
+    cfg = ConductivityConfig()
     gamma = ConductivityField(mesh, cfg).build()
     values = set(np.unique(gamma.x.array).tolist())
     assert values == {cfg.gamma_in, cfg.gamma_out}
@@ -43,9 +43,9 @@ def test_conductivity_inclusion_volume(mesh_data):
     from eit3d.fields import ConductivityField
 
     mesh, _, _ = mesh_data
-    cfg    = ConductivityConfig()
-    gamma  = ConductivityField(mesh, cfg).build()
-    exact  = 4.0 / 3.0 * np.pi * cfg.radius**3
+    cfg = ConductivityConfig()
+    gamma = ConductivityField(mesh, cfg).build()
+    exact = 4.0 / 3.0 * np.pi * cfg.radius**3
     marked = _volume_where(gamma, cfg.gamma_in)
     assert abs(marked - exact) / exact < 0.2
 
@@ -55,8 +55,8 @@ def test_eta_marks_every_sphere(mesh_data):
     from eit3d.fields import DirectionalField
 
     mesh, _, _ = mesh_data
-    cfg   = EtaConfig()
-    eta   = DirectionalField(mesh, cfg).build()
+    cfg = EtaConfig()
+    eta = DirectionalField(mesh, cfg).build()
     exact = len(cfg.centers) * 4.0 / 3.0 * np.pi * cfg.radius**3
     marked = _volume_where(eta, cfg.eta_in)
     assert abs(marked - exact) / exact < 0.3

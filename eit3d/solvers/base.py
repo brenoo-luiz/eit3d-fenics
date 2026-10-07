@@ -37,11 +37,11 @@ class BaseSolver(ABC):
         config: SolverConfig,
         comm  : MPI.Comm = MPI.COMM_WORLD,
     ) -> None:
-        self._mesh   = mesh
-        self._V      = V
-        self._gamma  = gamma
+        self._mesh = mesh
+        self._V = V
+        self._gamma = gamma
         self._config = config
-        self._comm   = comm
+        self._comm = comm
         self._ds_all = ufl.Measure("ds", domain=mesh)
 
     # Template Method
@@ -53,7 +53,7 @@ class BaseSolver(ABC):
         w = ufl.TrialFunction(self._V)
         v = ufl.TestFunction(self._V)
 
-        a_form  = dolfinx.fem.form(self._bilinear_form(w, v))
+        a_form = dolfinx.fem.form(self._bilinear_form(w, v))
         L_forms = [dolfinx.fem.form(L) for L in self._linear_forms(v)]
 
         solutions = self._assemble_and_solve_many(a_form, L_forms)
@@ -79,7 +79,7 @@ class BaseSolver(ABC):
         return [self._linear_form(v)]
 
     def _centered_flux(self, f: ufl.core.expr.Expr, ds_f: ufl.Measure, v: ufl.Argument) -> ufl.Form:
-        one  = dolfinx.fem.Constant(self._mesh, PETSc.ScalarType(1.0))
+        one = dolfinx.fem.Constant(self._mesh, PETSc.ScalarType(1.0))
         area = self._comm.allreduce(
             dolfinx.fem.assemble_scalar(dolfinx.fem.form(one * self._ds_all)), op=MPI.SUM,
         )

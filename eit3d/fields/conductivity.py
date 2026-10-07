@@ -33,7 +33,7 @@ class PiecewiseSphereField(ABC):
     """
 
     def __init__(self, mesh: dolfinx.mesh.Mesh) -> None:
-        self._mesh  = mesh
+        self._mesh = mesh
         self._space = dolfinx.fem.functionspace(mesh, ("DG", 0))
 
     # Hooks
@@ -92,7 +92,7 @@ class PiecewiseSphereField(ABC):
 
     def _local_cells_and_midpoints(self):
         """Cells owned by this process (ghosts are filled by scatter_forward)."""
-        tdim  = self._mesh.topology.dim
+        tdim = self._mesh.topology.dim
         n_loc = self._mesh.topology.index_map(tdim).size_local
         cells = np.arange(n_loc, dtype=np.int32)
         return cells, dolfinx.mesh.compute_midpoints(self._mesh, tdim, cells)
@@ -177,11 +177,11 @@ class SpheresField(PiecewiseSphereField):
         if radius <= 0:
             raise ValueError("radius must be positive")
         super().__init__(mesh)
-        self._centers   = tuple(np.asarray(c, dtype=float) for c in centers)
-        self._radius    = float(radius)
-        self._value_in  = float(value_in)
+        self._centers = tuple(np.asarray(c, dtype=float) for c in centers)
+        self._radius = float(radius)
+        self._value_in = float(value_in)
         self._value_out = float(value_out)
-        self._name      = name
+        self._name = name
 
     @property
     def name(self) -> str:

@@ -33,7 +33,7 @@ def p2_space(mesh):
 @pytest.fixture(scope="module")
 def fine(tmp_path_factory):
     cyl = CylinderMesh(MeshConfig(size_max=0.15, size_min=0.08), comm=COMM,
-                        cache_dir=tmp_path_factory.mktemp("fine"))
+                       cache_dir=tmp_path_factory.mktemp("fine"))
     mesh, facet_tags = cyl.get()
     return mesh, facet_tags, p2_space(mesh)
 
@@ -151,8 +151,11 @@ def test_inverse_figures(problem, tmp_path):
     renderer = StaticRenderer(EITConfig(), tmp_path)
     fields   = [("true", problem["truth"])] + [(f"k={k}", g) for k, g in result.snapshots.items()]
     outputs  = [
-        renderer.render_convergence({"0.1": (result.residuals, result.errors)}, "conv.png"),
+        renderer.render_inversion_history(result.residuals, result.errors, 0.1, "conv.png", floor=1e-2),
         renderer.render_conductivity_sections(fields, "sections.png", spheres=[(c, 0.25) for c in CENTERS], ncols=2),
+        renderer.render_conductivity_sections(
+            fields, "sections_shared.png", clims=[(1.0, 10.0)] + [(0.9, 1.1)] * (len(fields) - 1),
+        ),
     ]
     for out in outputs:
         assert out.exists() and out.stat().st_size > 0

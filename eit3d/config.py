@@ -7,14 +7,14 @@ from typing import Tuple
 import numpy as np
 
 
-ROOT_DIR    = Path(__file__).parent.parent
-CACHE_DIR   = ROOT_DIR / "cache"
+ROOT_DIR = Path(__file__).parent.parent
+CACHE_DIR = ROOT_DIR / "cache"
 OUTPUTS_DIR = ROOT_DIR / "outputs"
 
-TOP_TAG     = 1
-BOTTOM_TAG  = 2
+TOP_TAG = 1
+BOTTOM_TAG = 2
 LATERAL_TAG = 3
-VOLUME_TAG  = 10
+VOLUME_TAG = 10
 
 
 def _readonly_vector(value) -> np.ndarray:
@@ -50,9 +50,9 @@ class MeshConfig:
 @dataclass(frozen=True, eq=False)
 class ConductivityConfig:
     center   : np.ndarray = field(default_factory=lambda: np.array([0.0, 0.0, 0.0]))
-    radius   : float      = 0.35
-    gamma_in : float      = 2.0
-    gamma_out: float      = 1.0
+    radius   : float = 0.35
+    gamma_in : float = 2.0
+    gamma_out: float = 1.0
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "center", _readonly_vector(self.center))
@@ -109,7 +109,7 @@ class CurrentConfig:
 class SolverConfig:
     rtol   : float = 1e-11
     atol   : float = 1e-12
-    max_it : int   = 1000
+    max_it : int = 1000
 
     def __post_init__(self) -> None:
         if self.rtol <= 0 or self.atol <= 0:
@@ -120,7 +120,7 @@ class SolverConfig:
 
 @dataclass(frozen=True)
 class ConsistencyTestConfig:
-    n_iter : int   = 50
+    n_iter : int = 50
     base   : float = 0.9
 
     def __post_init__(self) -> None:
@@ -135,12 +135,12 @@ class ConsistencyTestConfig:
 
 @dataclass(frozen=True)
 class EITConfig:
-    mesh        : MeshConfig             = field(default_factory=MeshConfig)
-    conductivity: ConductivityConfig     = field(default_factory=ConductivityConfig)
-    eta         : EtaConfig              = field(default_factory=EtaConfig)
-    current     : CurrentConfig          = field(default_factory=CurrentConfig)
-    solver      : SolverConfig           = field(default_factory=SolverConfig)
-    consistency : ConsistencyTestConfig  = field(default_factory=ConsistencyTestConfig)
+    mesh        : MeshConfig = field(default_factory=MeshConfig)
+    conductivity: ConductivityConfig = field(default_factory=ConductivityConfig)
+    eta         : EtaConfig = field(default_factory=EtaConfig)
+    current     : CurrentConfig = field(default_factory=CurrentConfig)
+    solver      : SolverConfig = field(default_factory=SolverConfig)
+    consistency : ConsistencyTestConfig = field(default_factory=ConsistencyTestConfig)
 
     def summary(self) -> str:
         return "\n".join([
