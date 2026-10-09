@@ -1,5 +1,3 @@
-"""directional derivative F'(gamma)eta and consistency test."""
-
 import logging
 import sys
 from pathlib import Path

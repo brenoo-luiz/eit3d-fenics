@@ -1,11 +1,3 @@
-"""
-Inverse problem with the gradient method (Landweber).
-
-Fine mesh  : generates the data u~ = F_G(gamma+) and is then discarded.
-Coarse mesh: solves F_G(gamma) ~ u~ with
-            gamma_{k+1} = gamma_k - lambda F'_G(gamma_k)* (F_G(gamma_k) - u~),  gamma_0 = 1.
-"""
-
 import argparse
 import gc
 import logging
@@ -18,14 +10,14 @@ from mpi4py import MPI
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-import dolfinx  # noqa: E402
+import dolfinx
 
-from eit3d import EITConfig, EITPipeline, report  # noqa: E402
-from eit3d.config import OUTPUTS_DIR, MeshConfig  # noqa: E402
-from eit3d.currents import cosine_currents, lateral_measure  # noqa: E402
-from eit3d.fields import SpheresField  # noqa: E402
-from eit3d.inverse import GradientMethod, data_from, transfer  # noqa: E402
-from eit3d.visualization.static import StaticRenderer  # noqa: E402
+from eit3d import EITConfig, EITPipeline, report
+from eit3d.config import OUTPUTS_DIR, MeshConfig
+from eit3d.currents import cosine_currents, lateral_measure
+from eit3d.fields import SpheresField
+from eit3d.inverse import GradientMethod, data_from, transfer
+from eit3d.visualization.static import StaticRenderer
 
 FINE_MESH = MeshConfig(size_max=0.05, size_min=0.02)
 COARSE_MESH = MeshConfig(size_max=0.1, size_min=0.05)

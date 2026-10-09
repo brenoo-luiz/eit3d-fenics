@@ -4,10 +4,10 @@ import pytest
 pytest.importorskip("dolfinx")
 pytest.importorskip("gmsh")
 
-import dolfinx  # noqa: E402
-import dolfinx.fem  # noqa: E402
-import ufl  # noqa: E402
-from mpi4py import MPI  # noqa: E402
+import dolfinx
+import dolfinx.fem
+import ufl
+from mpi4py import MPI
 
 from eit3d.config import ConductivityConfig, EtaConfig, SolverConfig  # noqa: E402
 from eit3d.currents import cosine_currents, lateral_measure  # noqa: E402

@@ -1,8 +1,3 @@
-"""
-Eight electric currents g_k = cos(k theta) on the lateral surface, zero on the bases.
-Forward problem, directional derivative, adjoint and consistency tests for the set G.
-"""
-
 import logging
 import sys
 from pathlib import Path
@@ -15,13 +10,13 @@ from mpi4py import MPI
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-import dolfinx  # noqa: E402
+import dolfinx
 
-from eit3d import EITConfig, EITPipeline, report  # noqa: E402
-from eit3d.config import OUTPUTS_DIR, ConsistencyTestConfig, MeshConfig  # noqa: E402
-from eit3d.currents import cosine_currents, lateral_measure  # noqa: E402
-from eit3d.solvers import MultiAdjointSolver, MultiDerivativeSolver, MultiForwardSolver  # noqa: E402
-from eit3d.visualization.static import StaticRenderer, SurfacePanel  # noqa: E402
+from eit3d import EITConfig, EITPipeline, report  
+from eit3d.config import OUTPUTS_DIR, ConsistencyTestConfig, MeshConfig
+from eit3d.currents import cosine_currents, lateral_measure
+from eit3d.solvers import MultiAdjointSolver, MultiDerivativeSolver, MultiForwardSolver
+from eit3d.visualization.static import StaticRenderer, SurfacePanel
 
 KS = range(1, 9)
 MESH = MeshConfig(size_max=0.1, size_min=0.05)

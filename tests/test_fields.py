@@ -1,5 +1,3 @@
-"""Tests for the piecewise-constant sphere fields (gamma and eta)."""
-
 import numpy as np
 import pytest
 

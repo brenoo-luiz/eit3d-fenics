@@ -1,20 +1,3 @@
-"""
-adjoint F'(gamma)* h and its consistency test.
-
-Follows the advisor's steps:
-    1. Solve the forward problem with gamma and g:   find u,   int_dOmega u   = 0
-    2. Solve the forward problem with gamma and h
-        (h in place of the current, h = 2 on the caps, -1 on the lateral
-        surface, check int_dOmega h = 0):             find psi, int_dOmega psi = 0
-    3. F'(gamma)* h = -grad(u).grad(psi)
-
-Consistency test (sigma = same direction eta used in step3):
-    1. F'(gamma) sigma = omega|_dOmega
-    2. check <F'(gamma)* h, sigma> = <h, F'(gamma) sigma>:
-            a = |int_Omega (-grad u.grad psi) sigma - int_dOmega h omega|
-                / |int_dOmega h omega|   ~ 0
-"""
-
 import logging
 import sys
 from pathlib import Path
@@ -25,10 +8,10 @@ from mpi4py import MPI
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-import dolfinx  # noqa: E402
+import dolfinx
 
-from eit3d import EITConfig, EITPipeline, report  # noqa: E402
-from eit3d.solvers import AdjointSolver  # noqa: E402
+from eit3d import EITConfig, EITPipeline, report
+from eit3d.solvers import AdjointSolver
 
 H_CAPS = 2.0
 H_LATERAL = -1.0

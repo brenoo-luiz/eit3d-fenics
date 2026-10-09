@@ -1,9 +1,3 @@
-"""
-EIT 3D forward problem solver.
-
-Solves: int_Omega gamma grad(u).grad(v) dx = int_dOmega g v dS
-"""
-
 from __future__ import annotations
 
 import logging
@@ -46,8 +40,8 @@ class ForwardSolver(BaseSolver):
         gamma     : Coefficient,
         config    : SolverConfig,
         comm      : MPI.Comm = MPI.COMM_WORLD,
-        g_top     : float    = 1.0,
-        g_bot     : float    = -1.0,
+        g_top     : float = 1.0,
+        g_bot     : float = -1.0,
     ) -> None:
         super().__init__(mesh, V, gamma, config, comm)
         self._g_top = g_top

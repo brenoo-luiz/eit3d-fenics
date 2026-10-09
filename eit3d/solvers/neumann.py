@@ -1,12 +1,3 @@
-"""
-Generic pure Neumann solver with a flux defined on the whole boundary.
-
-Solves: int_Omega gamma grad(u).grad(v) dx = int_dOmega g v ds
-
-Used by the manufactured-solution consistency test, where g is a UFL
-expression such as dot(grad(u_exact), n).
-"""
-
 from __future__ import annotations
 
 import logging

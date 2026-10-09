@@ -1,7 +1,3 @@
-"""
-Piecewise-constant fields defined by spheres: conductivity gamma and derivative direction eta.
-"""
-
 from __future__ import annotations
 
 import logging

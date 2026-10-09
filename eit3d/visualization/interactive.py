@@ -1,5 +1,3 @@
-"""Interactive PyVista renderer"""
-
 from __future__ import annotations
 
 import logging

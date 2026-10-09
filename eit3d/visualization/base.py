@@ -1,5 +1,3 @@
-"""Shared state and geometry helpers for the renderers."""
-
 from __future__ import annotations
 
 from typing import Sequence

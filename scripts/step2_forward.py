@@ -1,7 +1,3 @@
-"""
-Solve and visualize the EIT 3D forward problem.
-"""
-
 import logging
 import sys
 from pathlib import Path

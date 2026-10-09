@@ -23,9 +23,9 @@ class SurfacePanel:
     grid  : pyvista.UnstructuredGrid
     scalar: str
     title : str
-    cmap  : str                              = "turbo"
-    clim  : Optional[Tuple[float, float]]    = None
-    bar   : Optional[str]                    = None
+    cmap  : str = "turbo"
+    clim  : Optional[Tuple[float, float]] = None
+    bar   : Optional[str] = None
 
 
 class StaticRenderer(BaseRenderer):

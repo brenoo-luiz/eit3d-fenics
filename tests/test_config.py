@@ -1,9 +1,3 @@
-"""
-Unit tests for EITConfig dataclasses.
-
-These tests depend only on NumPy, so they run without FEniCS.
-"""
-
 import dataclasses
 
 import numpy as np

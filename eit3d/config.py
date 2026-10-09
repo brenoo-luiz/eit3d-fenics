@@ -46,7 +46,7 @@ class MeshConfig:
 
 
 # eq=False: fields holding NumPy arrays make field-by-field `==` ambiguous
-# and unhashable, so these two configs compare (and hash) by identity.
+# and unhashable, so these two configs compare (and hash) by identity
 @dataclass(frozen=True, eq=False)
 class ConductivityConfig:
     center   : np.ndarray = field(default_factory=lambda: np.array([0.0, 0.0, 0.0]))

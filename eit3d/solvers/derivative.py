@@ -1,11 +1,3 @@
-"""
-Directional derivative of the EIT forward operator (eq. 1.13).
-
-Solves: int_Omega gamma grad(w).grad(v) dx = -int_Omega eta grad(u_gamma).grad(v) dx
-
-Reference: Margotti et al. (2023), eq. (1.13), Proposition 1.3.
-"""
-
 from __future__ import annotations
 
 import logging

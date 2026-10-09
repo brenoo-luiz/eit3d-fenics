@@ -4,21 +4,21 @@ import pytest
 pytest.importorskip("dolfinx")
 pytest.importorskip("gmsh")
 
-import basix.ufl  # noqa: E402
-import dolfinx  # noqa: E402
-import dolfinx.fem  # noqa: E402
-import ufl  # noqa: E402
-from mpi4py import MPI  # noqa: E402
+import basix.ufl
+import dolfinx
+import dolfinx.fem
+import ufl
+from mpi4py import MPI
 
-from eit3d.config import EtaConfig, MeshConfig, SolverConfig  # noqa: E402
-from eit3d.currents import cosine_currents, lateral_measure  # noqa: E402
-from eit3d.fields import DirectionalField, SpheresField  # noqa: E402
-from eit3d.inverse import GradientMethod, data_from, project_dg0, transfer  # noqa: E402
-from eit3d.mesh.cylinder import CylinderMesh  # noqa: E402
+from eit3d.config import EtaConfig, MeshConfig, SolverConfig
+from eit3d.currents import cosine_currents, lateral_measure
+from eit3d.fields import DirectionalField, SpheresField
+from eit3d.inverse import GradientMethod, data_from, project_dg0, transfer
+from eit3d.mesh.cylinder import CylinderMesh
 
-COMM    = MPI.COMM_WORLD
-SOLVER  = SolverConfig()
-KS      = range(1, 9)
+COMM = MPI.COMM_WORLD
+SOLVER = SolverConfig()
+KS = range(1, 9)
 CENTERS = ((0.4, 0.0, 0.4), (-0.4, 0.0, -0.4))
 
 
@@ -33,7 +33,7 @@ def p2_space(mesh):
 @pytest.fixture(scope="module")
 def fine(tmp_path_factory):
     cyl = CylinderMesh(MeshConfig(size_max=0.15, size_min=0.08), comm=COMM,
-                       cache_dir=tmp_path_factory.mktemp("fine"))
+                        cache_dir=tmp_path_factory.mktemp("fine"))
     mesh, facet_tags = cyl.get()
     return mesh, facet_tags, p2_space(mesh)
 
@@ -42,11 +42,11 @@ def fine(tmp_path_factory):
 def problem(mesh_data, fine):
     mesh_f, tags_f, V_f = fine
     gamma_f = SpheresField(mesh_f, CENTERS, 0.25, 10.0, 1.0).build()
-    data_f  = data_from(mesh_f, V_f, gamma_f, cosine_currents(mesh_f, KS), lateral_measure(mesh_f, tags_f), SOLVER, COMM)
+    data_f = data_from(mesh_f, V_f, gamma_f, cosine_currents(mesh_f, KS), lateral_measure(mesh_f, tags_f), SOLVER, COMM)
 
     mesh, tags, V = mesh_data
-    data   = [transfer(d, V) for d in data_f]
-    truth  = SpheresField(mesh, CENTERS, 0.25, 10.0, 1.0).build()
+    data = [transfer(d, V) for d in data_f]
+    truth = SpheresField(mesh, CENTERS, 0.25, 10.0, 1.0).build()
     method = GradientMethod(mesh, V, cosine_currents(mesh, KS), lateral_measure(mesh, tags), data, SOLVER, truth, COMM)
     gamma0 = SpheresField(mesh, (), 0.25, 1.0, 1.0).build()
     return dict(mesh=mesh, tags=tags, V=V, method=method, gamma0=gamma0, truth=truth)
@@ -83,9 +83,9 @@ def test_project_dg0_preserves_integrals(problem):
 def test_gradient_matches_finite_difference(problem):
     method, gamma0, mesh = problem["method"], problem["gamma0"], problem["mesh"]
     sigma = DirectionalField(mesh, EtaConfig()).build()
-    u0    = method.forward(gamma0)
-    phi0  = 0.5 * method.residual(u0) ** 2
-    dphi  = integrate(method.gradient(gamma0, u0) * sigma * ufl.dx)
+    u0 = method.forward(gamma0)
+    phi0 = 0.5 * method.residual(u0) ** 2
+    dphi = integrate(method.gradient(gamma0, u0) * sigma * ufl.dx)
 
     errors = []
     for t in (1e-3, 1e-4):
@@ -98,7 +98,7 @@ def test_gradient_matches_finite_difference(problem):
 
 def test_small_step_decreases_objective(problem):
     method, gamma0 = problem["method"], problem["gamma0"]
-    u0      = method.forward(gamma0)
+    u0 = method.forward(gamma0)
     gamma_1 = gamma0.copy()
     gamma_1.x.array[:] -= 0.1 * method.gradient(gamma0, u0).x.array
     assert method.objective(gamma_1) < 0.5 * method.residual(u0) ** 2
@@ -107,10 +107,10 @@ def test_small_step_decreases_objective(problem):
 def test_true_conductivity_is_stationary_without_model_error(problem):
     mesh, tags, V, truth = problem["mesh"], problem["tags"], problem["V"], problem["truth"]
     currents = cosine_currents(mesh, KS)
-    ds_g     = lateral_measure(mesh, tags)
-    data     = data_from(mesh, V, truth, currents, ds_g, SOLVER, COMM)
-    method   = GradientMethod(mesh, V, currents, ds_g, data, SOLVER, truth, COMM)
-    u        = method.forward(truth)
+    ds_g = lateral_measure(mesh, tags)
+    data = data_from(mesh, V, truth, currents, ds_g, SOLVER, COMM)
+    method = GradientMethod(mesh, V, currents, ds_g, data, SOLVER, truth, COMM)
+    u = method.forward(truth)
     assert method.residual(u) < 1e-9
     assert np.abs(method.gradient(truth, u).x.array).max() < 1e-9
     assert method.error(truth) == 0.0
@@ -147,10 +147,10 @@ def test_inverse_figures(problem, tmp_path):
     from eit3d.config import EITConfig
     from eit3d.visualization.static import StaticRenderer
 
-    result   = problem["method"].run(problem["gamma0"], 0.1, 2, snapshot_every=1)
+    result = problem["method"].run(problem["gamma0"], 0.1, 2, snapshot_every=1)
     renderer = StaticRenderer(EITConfig(), tmp_path)
-    fields   = [("true", problem["truth"])] + [(f"k={k}", g) for k, g in result.snapshots.items()]
-    outputs  = [
+    fields = [("true", problem["truth"])] + [(f"k={k}", g) for k, g in result.snapshots.items()]
+    outputs = [
         renderer.render_inversion_history(result.residuals, result.errors, 0.1, "conv.png", floor=1e-2),
         renderer.render_conductivity_sections(fields, "sections.png", spheres=[(c, 0.25) for c in CENTERS], ncols=2),
         renderer.render_conductivity_sections(

@@ -1,7 +1,3 @@
-"""
-Generate and cache the cylinder mesh.
-"""
-
 import logging
 import sys
 from pathlib import Path

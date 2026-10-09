@@ -1,21 +1,13 @@
-"""
-Tests for the renderers.
-
-Title tests are pure. Image tests render off-screen on a coarse mesh 
-and are skipped when PyVista cannot render on this machine.
-"""
-
 import numpy as np
 import pytest
 
 pyvista = pytest.importorskip("pyvista")
 
-from eit3d.config import ConductivityConfig, EITConfig, EtaConfig, MeshConfig  # noqa: E402
-from eit3d.visualization import (  # noqa: E402
+from eit3d.config import ConductivityConfig, EITConfig, EtaConfig, MeshConfig
+from eit3d.visualization import (
     BaseRenderer, InteractiveRenderer, StaticRenderer, SurfacePanel,
 )
 
-# VTK 9.6 internals trigger a NumPy 2.5 DeprecationWarning
 pytestmark = pytest.mark.filterwarnings(
     "ignore:Setting the shape on a NumPy array:DeprecationWarning:vtkmodules",
 )
@@ -64,7 +56,7 @@ def test_cylinder_matches_mesh_config(tmp_path):
 def test_section_circle_radius():
     circle = BaseRenderer._section_circle((0.0, 0.0, 0.0), 0.5, axis=0, plane=0.3)
     radii = np.linalg.norm(circle.points[:, 1:], axis=1)
-    assert np.allclose(radii, 0.4, atol=1e-2)       # sqrt(0.5^2 - 0.3^2)
+    assert np.allclose(radii, 0.4, atol=1e-2)
     assert np.allclose(circle.points[:, 0], 0.3)
 
 

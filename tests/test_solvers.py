@@ -1,36 +1,21 @@
-"""
-Numerical regression tests for the EIT 3D solvers.
-
-Run on a coarse mesh and check the mathematical properties
-verified by the scripts:
-
-    - manufactured solution is reproduced exactly (P2 represents x^2 - y^2)
-    - every solution satisfies int_dOmega u ds = 0 (H^1_diamond normalization)
-    - forward solution is odd in z (symmetry of gamma and g)
-    - directional derivative is first-order consistent (slope 1 in log-log)
-    - adjoint relation <F'* h, sigma> = <h, F' sigma> holds
-
-Skipped automatically when FEniCS (dolfinx) or gmsh are not installed.
-"""
-
 import numpy as np
 import pytest
 
 pytest.importorskip("dolfinx")
 pytest.importorskip("gmsh")
 
-import dolfinx  # noqa: E402
-import dolfinx.fem  # noqa: E402
-import ufl  # noqa: E402
-from mpi4py import MPI  # noqa: E402
+import dolfinx
+import dolfinx.fem
+import ufl
+from mpi4py import MPI
 
-from eit3d.config import ConductivityConfig, EtaConfig, SolverConfig  # noqa: E402
-from eit3d.fields.conductivity import ConductivityField, DirectionalField  # noqa: E402
-from eit3d.solvers import (  # noqa: E402
+from eit3d.config import ConductivityConfig, EtaConfig, SolverConfig
+from eit3d.fields.conductivity import ConductivityField, DirectionalField
+from eit3d.solvers import (
     AdjointSolver, DerivativeSolver, ForwardSolver, NeumannSolver,
 )
 
-COMM   = MPI.COMM_WORLD
+COMM = MPI.COMM_WORLD
 SOLVER = SolverConfig()
 
 
