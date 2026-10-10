@@ -3,8 +3,8 @@ import pytest
 
 pyvista = pytest.importorskip("pyvista")
 
-from eit3d.config import ConductivityConfig, EITConfig, EtaConfig, MeshConfig
-from eit3d.visualization import (
+from eit3d.config import ConductivityConfig, EITConfig, EtaConfig, MeshConfig  # noqa: E402
+from eit3d.visualization import (  # noqa: E402
     BaseRenderer, InteractiveRenderer, StaticRenderer, SurfacePanel,
 )
 
@@ -37,13 +37,13 @@ def test_geometry_titles_follow_config(tmp_path):
     )
     left, right = StaticRenderer(cfg, tmp_path)._geometry_titles()
     assert "r=0.5" in left and "γ=3" in left
-    assert "1 sphere " in right and "r=0.15" in right and "(0.1, 0.2, 0)" in right
+    assert "1 esfera " in right and "r=0.15" in right and "(0.1, 0.2, 0)" in right
 
 
 def test_forward_titles_follow_pattern(tmp_path):
     cfg = EITConfig()
     title, _ = StaticRenderer(cfg, tmp_path)._forward_titles(pattern=0)
-    assert "g=+1 top" in title and "g=-1 base" in title
+    assert "g=+1 no topo" in title and "g=-1 na base" in title
 
 
 def test_cylinder_matches_mesh_config(tmp_path):
@@ -56,7 +56,7 @@ def test_cylinder_matches_mesh_config(tmp_path):
 def test_section_circle_radius():
     circle = BaseRenderer._section_circle((0.0, 0.0, 0.0), 0.5, axis=0, plane=0.3)
     radii = np.linalg.norm(circle.points[:, 1:], axis=1)
-    assert np.allclose(radii, 0.4, atol=1e-2)
+    assert np.allclose(radii, 0.4, atol=1e-2)       # sqrt(0.5^2 - 0.3^2)
     assert np.allclose(circle.points[:, 0], 0.3)
 
 
@@ -85,7 +85,7 @@ def test_static_figures(tmp_path, mesh_data):
     grid["u"] = V.tabulate_dof_coordinates()[:, 2]   # u = z
 
     renderer = StaticRenderer(EITConfig(), tmp_path)
-    outputs  = [
+    outputs = [
         renderer.render_geometry(),
         renderer.render_forward(grid, "u"),
         renderer.render_forward_overview(grid, "u"),

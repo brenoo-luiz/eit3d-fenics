@@ -83,11 +83,11 @@ def main() -> None:
     out = StaticRenderer(cfg, OUTPUTS_DIR).render_surfaces(
         [
             SurfacePanel(make_grid("u_exact", u_exact.x.array.real), "u_exact",
-                        "Exact solution  u = x^2 - y^2 - c", clim=clim_u),
+                        "Solução exata  u = x² − y² − c", clim=clim_u, bar="u"),
             SurfacePanel(make_grid("u_h", u_h.x.array.real), "u_h",
-                        "Numerical solution  u_h", clim=clim_u),
+                        "Solução numérica  uₕ", clim=clim_u, bar="uₕ"),
             SurfacePanel(make_grid("error", u_err.x.array.real), "error",
-                        "Pointwise error  |u_h - u_exact|", cmap="hot", clim=(0.0, err_max)),
+                        "Erro  |uₕ − u|", cmap="inferno", clim=(0.0, err_max), bar="erro"),
         ],
         filename="consistency_test.png",
     )

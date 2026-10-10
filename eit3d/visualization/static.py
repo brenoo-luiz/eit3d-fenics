@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional, Sequence, Tuple
@@ -8,6 +9,8 @@ from typing import List, Optional, Sequence, Tuple
 import matplotlib.pyplot as plt
 import numpy as np
 import pyvista
+from matplotlib.cm import ScalarMappable
+from matplotlib.colors import Normalize
 
 from eit3d.config import OUTPUTS_DIR, EITConfig
 from eit3d.visualization.base import BaseRenderer
@@ -16,19 +19,61 @@ logger = logging.getLogger(__name__)
 
 AXES = {"x": 0, "y": 1, "z": 2}
 
+PRIMARY = "#1f3a68"
+ACCENT = "#c0392b"
+MUTED = "#8a8f98"
+TEXT = "#222222"
+
+STYLE = {
+    "figure.facecolor": "white",
+    "axes.facecolor": "white",
+    "axes.edgecolor": "#444444",
+    "axes.labelcolor": TEXT,
+    "axes.titlesize": 13,
+    "axes.labelsize": 12,
+    "axes.spines.top": False,
+    "axes.spines.right": False,
+    "axes.grid": True,
+    "axes.grid.which": "major",
+    "grid.color": "#d9d9d9",
+    "grid.linestyle": "--",
+    "grid.linewidth": 0.6,
+    "xtick.color": TEXT,
+    "ytick.color": TEXT,
+    "xtick.labelsize": 10,
+    "ytick.labelsize": 10,
+    "legend.frameon": False,
+    "legend.fontsize": 10,
+    "font.size": 11,
+    "text.color": TEXT,
+}
+
 
 @dataclass(frozen=True)
 class SurfacePanel:
     """One panel of a multi-panel figure: a scalar field on the domain surface."""
-    grid  : pyvista.UnstructuredGrid
+    grid: pyvista.UnstructuredGrid
     scalar: str
-    title : str
-    cmap  : str = "turbo"
-    clim  : Optional[Tuple[float, float]] = None
-    bar   : Optional[str] = None
+    title: str
+    cmap: str = "coolwarm"
+    clim: Optional[Tuple[float, float]] = None
+    bar: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class _Panel:
+    image: np.ndarray
+    title: str
+    cmap: Optional[str] = None
+    clim: Optional[Tuple[float, float]] = None
+    label: Optional[str] = None
 
 
 class StaticRenderer(BaseRenderer):
+
+    BG = "white"
+    WINDOW_SIZE = (1100, 1100)
+    DPI = 300
 
     def __init__(self, config: EITConfig, output_dir: Path = OUTPUTS_DIR) -> None:
         super().__init__(config)
@@ -36,240 +81,178 @@ class StaticRenderer(BaseRenderer):
         self._output_dir.mkdir(parents=True, exist_ok=True)
 
     # Public figures
-    def render_mesh(
-        self, grid: pyvista.UnstructuredGrid, filename: str = "step1_mesh.png",
-    ) -> Path:
-        """Boundary mesh with element edges (single image)."""
-        p = self._plotter(window_size=(900, 900))
-        p.add_mesh(grid, color="lightblue", show_edges=True,
-                    edge_color="#2a2a4a", line_width=0.3)
+    def render_mesh(self, grid: pyvista.UnstructuredGrid, filename: str = "step1_mesh.png") -> Path:
+        p = self._plotter()
+        p.add_mesh(grid, color="#e8edf3", show_edges=True, edge_color=PRIMARY, line_width=0.3)
         p.view_isometric()
-        p.camera.zoom(1.1)
-        out = self._output_dir / filename
-        p.screenshot(str(out))
-        p.close()
-        logger.info("Saved: %s", out)
-        return out
+        mesh = self._config.mesh
+        return self._compose(
+            [_Panel(self._snap(p), f"Malha  (raio {self._fmt(mesh.radius)}, altura {self._fmt(mesh.height)})")],
+            filename, width=6,
+        )
 
     def render_geometry(self, filename: str = "step3_a_geometry.png") -> Path:
-        """Conductivity inclusion (left) and derivative direction spheres (right)."""
         gam, eta = self._config.conductivity, self._config.eta
-        cyl = (self._cylinder(), "#1a3a6a", 0.35)
-
-        img_gamma = self._geometry_image(
-            [cyl, (self._sphere(gam.center, gam.radius), "#cc3333", 0.95)],
-            label=f"gamma = {self._fmt(gam.gamma_in)} (sphere)  /  "
-                    f"gamma = {self._fmt(gam.gamma_out)} (background)",
-        )
-        img_eta = self._geometry_image(
-            [cyl] + [(self._sphere(c, eta.radius), "#33aa33", 0.95) for c in eta.centers],
-            label=f"eta = {self._fmt(eta.eta_in)} (spheres)  /  "
-                    f"eta = {self._fmt(eta.eta_out)} (background)",
-        )
-        return self._compose([img_gamma, img_eta], self._geometry_titles(), filename)
+        left, right = self._geometry_titles()
+        img_gamma = self._geometry_image([(self._sphere(gam.center, gam.radius), ACCENT)])
+        img_eta = self._geometry_image([(self._sphere(c, eta.radius), "#2e7d4f") for c in eta.centers])
+        return self._compose([_Panel(img_gamma, left), _Panel(img_eta, right)], filename)
 
     def render_forward(
         self,
-        grid    : pyvista.UnstructuredGrid,
-        scalar  : str,
-        pattern : int = 0,
+        grid: pyvista.UnstructuredGrid,
+        scalar: str,
+        pattern: int = 0,
         filename: str = "step3_b_forward.png",
     ) -> Path:
-        """Forward solution on the surface (left) and on a section through the inclusion (right)."""
         clim = self._clim(grid, scalar)
+        left, right = self._forward_titles(pattern)
         return self._compose(
             [
-                self._surface_image(grid, scalar, "turbo", clim, bar="u_γ"),
-                self._inclusion_section_image(grid, scalar, "turbo", clim),
+                _Panel(self._surface_image(grid, scalar, "coolwarm", clim), left, "coolwarm", clim, r"$u_\gamma$"),
+                _Panel(self._inclusion_section_image(grid, scalar, "coolwarm", clim), right,
+                        "coolwarm", clim, r"$u_\gamma$"),
             ],
-            self._forward_titles(pattern),
             filename,
         )
 
     def render_forward_overview(
         self,
-        grid    : pyvista.UnstructuredGrid,
-        scalar  : str,
+        grid: pyvista.UnstructuredGrid,
+        scalar: str,
         filename: str = "step2_forward.png",
     ) -> Path:
-        """Inclusion geometry, surface solution and section, side by side."""
         gam = self._config.conductivity
         clim = self._clim(grid, scalar)
-        img_geo = self._geometry_image(
-            [(self._cylinder(), "#1a3a6a", 0.45),
-            (self._sphere(gam.center, gam.radius), "#cc3333", 0.95)],
-            # VTK text has no Greek glyphs: labels drawn inside the 3D view use "gamma"
-            label=f"gamma = {self._fmt(gam.gamma_in)} (sphere)  /  "
-                    f"gamma = {self._fmt(gam.gamma_out)} (background)",
-        )
+        img_geo = self._geometry_image([(self._sphere(gam.center, gam.radius), ACCENT)])
         return self._compose(
             [
-                img_geo,
-                self._surface_image(grid, scalar, "turbo", clim, bar=scalar),
-                self._inclusion_section_image(grid, scalar, "turbo", clim),
-            ],
-            [
-                "Conductivity γ (sphere inclusion)",
-                "Solution u: cylinder surface",
-                f"Cross-section at x={self._fmt(gam.center[0])}",
+                _Panel(img_geo, f"Condutividade  (γ={self._fmt(gam.gamma_in)} na esfera, "
+                                f"{self._fmt(gam.gamma_out)} fora)"),
+                _Panel(self._surface_image(grid, scalar, "coolwarm", clim), "Potencial u na superfície",
+                        "coolwarm", clim, "u"),
+                _Panel(self._inclusion_section_image(grid, scalar, "coolwarm", clim),
+                        f"Corte em x = {self._fmt(gam.center[0])}", "coolwarm", clim, "u"),
             ],
             filename,
         )
 
     def render_omega(
         self,
-        grid    : pyvista.UnstructuredGrid,
-        scalar  : str,
+        grid: pyvista.UnstructuredGrid,
+        scalar: str,
         integral: float,
         filename: str = "step3_c_omega.png",
     ) -> Path:
-        """Directional derivative on the surface and on a section through the eta spheres."""
-        clim = self._clim(grid, scalar)
+        clim = self._symmetric_clim(grid, scalar)
         plane = float(self._config.eta.centers[0][AXES["y"]])
+        overlays = [
+            self._section_circle(c, self._config.eta.radius, AXES["y"], plane) for c in self._config.eta.centers
+        ]
         return self._compose(
             [
-                self._surface_image(grid, scalar, "coolwarm", clim, bar="ω"),
-                self._section_image(grid, scalar, "coolwarm", clim, axis="y", plane=plane),
-            ],
-            [
-                f"ω: surface  (F'(γ)η = ω|_{{∂Ω}})\n"
-                f"[{clim[0]:.4f}, {clim[1]:.4f}]  |  ∫ω ds = {integral:.2e}",
-                f"ω: cross-section at y={self._fmt(plane)}\n"
-                "(internal structure reflects η spheres)",
+                _Panel(self._surface_image(grid, scalar, "RdBu_r", clim),
+                        f"Derivada ω na superfície  (∫ω ds = {integral:.1e})", "RdBu_r", clim, "ω"),
+                _Panel(self._section_image(grid, scalar, "RdBu_r", clim, axis="y", plane=plane, overlays=overlays),
+                        f"Corte em y = {self._fmt(plane)}  (círculos: esferas de η)", "RdBu_r", clim, "ω"),
             ],
             filename,
         )
 
     def render_surfaces(self, panels: Sequence[SurfacePanel], filename: str) -> Path:
-        """Generic figure: one surface plot per panel, side by side."""
-        images = [
-            self._surface_image(
-                pn.grid, pn.scalar, pn.cmap,
-                pn.clim if pn.clim is not None else self._clim(pn.grid, pn.scalar),
-                bar=pn.bar if pn.bar is not None else pn.scalar,
-            )
-            for pn in panels
-        ]
-        return self._compose(images, [pn.title for pn in panels], filename)
+        images = []
+        for pn in panels:
+            clim = pn.clim if pn.clim is not None else self._clim(pn.grid, pn.scalar)
+            images.append(_Panel(
+                self._surface_image(pn.grid, pn.scalar, pn.cmap, clim), pn.title, pn.cmap, clim,
+                pn.bar if pn.bar is not None else pn.scalar,
+            ))
+        return self._compose(images, filename)
 
     def render_consistency(
         self,
-        y_vals  : np.ndarray,
-        t_vals  : np.ndarray,
-        slope   : float,
+        y_vals: np.ndarray,
+        t_vals: np.ndarray,
+        slope: float,
         fit_line: np.ndarray,
-        idx_min : int,
+        idx_min: int,
         filename: str = "step3_d_consistency.png",
     ) -> Path:
-        """y_n vs n (semilog) and log y_n vs log t_n with the fitted rate."""
         ns = np.arange(len(y_vals))
-        log_t = np.log10(t_vals)
-        log_y = np.log10(y_vals)
-        ref_y = log_t - log_t[0] + log_y[0]
         base = self._fmt(self._config.consistency.base)
+        n_fit = len(fit_line)
 
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(18, 7), facecolor=self.BG)
+        with plt.rc_context(STYLE):
+            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4.6), layout="constrained")
 
-        ax1.semilogy(ns, y_vals, "o-", color="#44aaff", linewidth=2,
-                    markersize=5, markerfacecolor="white", label="$y_n$")
-        ax1.axvline(idx_min, color="#ffcc44", linestyle="--", alpha=0.6,
-                    label=f"minimum n={idx_min}")
-        ax1.set_xlabel("n", color="white", fontsize=13)
-        ax1.set_ylabel("$y_n$ (log scale)", color="white", fontsize=13)
-        ax1.set_title(
-            f"$y_n$ vs $n$,  $t_n = {base}^n$\n"
-            r"$y_n = \|z_n - \omega\|_{L^2(\partial\Omega)} / \|\omega\|_{L^2(\partial\Omega)}$",
-            color="white", fontsize=12,
-        )
-        ax1.annotate(
-            f"min: y_{idx_min} = {y_vals[idx_min]:.2e}",
-            xy=(idx_min, y_vals[idx_min]),
-            xytext=(idx_min + 1, y_vals[idx_min] * 3),
-            color="#ffcc44", fontsize=11,
-            arrowprops=dict(arrowstyle="->", color="#ffcc44"),
-        )
+            ax1.semilogy(ns, y_vals, "o-", color=PRIMARY, markersize=3, linewidth=1, label="$y_n$")
+            ax1.semilogy(idx_min, y_vals[idx_min], "o", markersize=8, markerfacecolor="none",
+                        markeredgecolor=ACCENT, markeredgewidth=1.5,
+                        label=f"mínimo: $y_{{{idx_min}}}$ = {y_vals[idx_min]:.1e}")
+            ax1.set_xlabel("Índice $n$")
+            ax1.set_ylabel("$y_n$")
+            ax1.set_title(f"Teste de consistência  ($t_n = {base}^n$)")
+            ax1.legend()
 
-        ax2.plot(log_t, log_y, "o", color="#44aaff", markersize=5,
-                markerfacecolor="white", label=r"$\log y_n$ vs $\log t_n$")
-        ax2.plot(log_t[:len(fit_line)], fit_line, "--", color="#ff7744",
-                linewidth=2, label=f"linear fit (slope ≈ {slope:.2f})")
-        ax2.plot(log_t, ref_y, ":", color="#aaaaaa", linewidth=1.5,
-                label="slope = 1 (theoretical)")
-        ax2.set_xlabel(r"$\log_{10}(t_n)$", color="white", fontsize=13)
-        ax2.set_ylabel(r"$\log_{10}(y_n)$", color="white", fontsize=13)
-        ax2.set_title(
-            "Convergence rate: $\\log t_n$ vs $\\log y_n$\n"
-            "Slope $\\approx 1$ confirms $y_n = O(t_n)$ (Fréchet derivative)",
-            color="white", fontsize=12,
-        )
-        ax2.annotate(
-            f"estimated rate: {slope:.3f}",
-            xy=(log_t[len(fit_line) - 1], fit_line[-1]),
-            xytext=(log_t[len(fit_line) - 1] + 0.05, fit_line[-1] + 0.2),
-            color="#ff7744", fontsize=11,
-            arrowprops=dict(arrowstyle="->", color="#ff7744"),
-        )
-
-        for ax in (ax1, ax2):
-            self._style_axes(ax)
-
-        plt.tight_layout(pad=1.0)
-        return self._save(fig, filename)
+            ax2.loglog(t_vals, y_vals, "o", color=PRIMARY, markersize=3, label="$y_n$")
+            ax2.loglog(t_vals[:n_fit], 10 ** fit_line, "-", color=ACCENT, linewidth=1.5,
+                        label=f"ajuste: inclinação {slope:.3f}")
+            ax2.loglog(t_vals, t_vals * y_vals[0] / t_vals[0], ":", color=MUTED, linewidth=1.2,
+                        label="inclinação 1 (teoria)")
+            ax2.invert_xaxis()
+            ax2.set_xlabel("$t_n$")
+            ax2.set_ylabel("$y_n$")
+            ax2.set_title("Taxa de convergência")
+            ax2.legend()
+            return self._save(fig, filename)
 
     def render_inversion_history(
         self,
         residuals: np.ndarray,
-        errors   : np.ndarray,
-        step     : float,
-        filename : str,
-        floor    : Optional[float] = None,
+        errors: np.ndarray,
+        step: float,
+        filename: str,
+        floor: Optional[float] = None,
     ) -> Path:
         ks = np.arange(len(residuals))
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6), facecolor=self.BG)
-        fig.suptitle(f"Método do gradiente,  λ = {step:g}", color="white", fontsize=15)
+        with plt.rc_context(STYLE):
+            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4.6), layout="constrained")
+            fig.suptitle(f"Método do gradiente,  λ = {step:g}", fontsize=14)
 
-        ax1.semilogy(ks, residuals, "-", color="#44aaff", linewidth=2.5, label="resíduo")
-        if floor is not None:
-            ax1.axhline(floor, color="#aaaaaa", linestyle="--", linewidth=1.5,
-                        label=f"referência: resíduo de γ⁺ = {floor:.2e}")
-        ax1.set_title("Resíduo  ‖F_G(γ_k) − ũ‖", color="white", fontsize=13)
-        ax1.set_ylabel("resíduo (escala log)", color="white", fontsize=12)
+            ax1.semilogy(ks, residuals, "-", color=PRIMARY, linewidth=1.6, label="resíduo")
+            if floor is not None:
+                ax1.axhline(floor, color=MUTED, linestyle="--", linewidth=1,
+                            label=f"resíduo de γ⁺  ({floor:.1e})")
+            ax1.set_title(r"Resíduo  $\|F_G(\gamma_k) - \tilde u\|$")
+            ax1.set_ylabel("resíduo")
 
-        ax2.plot(ks, errors, "-", color="#ff7744", linewidth=2.5, label="erro relativo")
-        ax2.set_title("Erro relativo  ‖γ⁺ − γ_k‖ / ‖γ⁺‖", color="white", fontsize=13)
-        ax2.set_ylabel("erro relativo", color="white", fontsize=12)
+            ax2.plot(ks, errors, "-", color=ACCENT, linewidth=1.6, label="erro relativo")
+            ax2.set_title(r"Erro relativo  $\|\gamma^+ - \gamma_k\| \,/\, \|\gamma^+\|$")
+            ax2.set_ylabel("erro relativo")
 
-        for ax, values in ((ax1, residuals), (ax2, errors)):
-            ax.set_xlabel("iteração k", color="white", fontsize=12)
-            ax.annotate(
-                f"início {values[0]:.3g}\nfim {values[-1]:.3g}",
-                xy=(0.97, 0.95), xycoords="axes fraction", ha="right", va="top",
-                color="white", fontsize=11,
-                bbox=dict(boxstyle="round", facecolor=self.BG, edgecolor="#4a4a6a"),
-            )
-            self._style_axes(ax)
-            ax.legend(loc="center right", facecolor=self.BG, edgecolor="#4a4a6a", labelcolor="white", fontsize=11)
-
-        plt.tight_layout(pad=1.0)
-        return self._save(fig, filename)
+            for ax in (ax1, ax2):
+                ax.set_xlabel("Iteração $k$")
+                ax.set_xlim(0, ks[-1])
+                ax.legend(loc="upper right")
+            return self._save(fig, filename)
 
     def render_conductivity_sections(
         self,
-        fields  : Sequence[Tuple[str, object]],
+        fields: Sequence[Tuple[str, object]],
         filename: str,
-        spheres : Sequence[Tuple[Sequence[float], float]] = (),
-        axis    : str = "y",
-        plane   : float = 0.0,
-        clim    : Optional[Tuple[float, float]] = None,
-        ncols   : int = 4,
-        clims   : Optional[Sequence[Optional[Tuple[float, float]]]] = None,
+        spheres: Sequence[Tuple[Sequence[float], float]] = (),
+        axis: str = "y",
+        plane: float = 0.0,
+        clim: Optional[Tuple[float, float]] = None,
+        ncols: int = 4,
+        clims: Optional[Sequence[Optional[Tuple[float, float]]]] = None,
     ) -> Path:
         import dolfinx.plot
 
         overlays = [self._section_circle(c, r, AXES[axis], plane) for c, r in spheres]
-        images = []
         clims = clims if clims is not None else [clim] * len(fields)
-        for (_, f), panel_clim in zip(fields, clims):
+        panels = []
+        for (title, f), panel_clim in zip(fields, clims):
             mesh = f.function_space.mesh
             n = mesh.topology.index_map(mesh.topology.dim).size_local
             cells = np.arange(n, dtype=np.int32)
@@ -277,8 +260,14 @@ class StaticRenderer(BaseRenderer):
             grid = pyvista.UnstructuredGrid(topo, ct, geo)
             grid.cell_data["gamma"] = f.x.array[f.function_space.dofmap.list[cells, 0]]
             lims = panel_clim if panel_clim is not None else self._clim(grid, "gamma")
-            images.append(self._section_image(grid, "gamma", "viridis", lims, axis, plane, overlays, bar="γ"))
-        return self._compose(images, [title for title, _ in fields], filename, ncols=ncols)
+            image = self._section_image(grid, "gamma", "viridis", lims, axis, plane, overlays)
+            panels.append(_Panel(image, self._math_title(title), "viridis", lims, "γ"))
+
+        shared = None
+        if len(panels) > 2 and len({p.clim for p in panels[1:]}) == 1:
+            shared = ("viridis", panels[1].clim, "γ")
+            panels = panels[:1] + [_Panel(p.image, p.title) for p in panels[1:]]
+        return self._compose(panels, filename, ncols=ncols, width=3.4, shared_bar=shared)
 
     # Titles
     def _geometry_titles(self) -> List[str]:
@@ -286,20 +275,17 @@ class StaticRenderer(BaseRenderer):
         n = len(eta.centers)
         centers = ", ".join(self._fmt_point(c) for c in eta.centers)
         return [
-            f"Conductivity γ\n(sphere r={self._fmt(gam.radius)}, "
-            f"γ={self._fmt(gam.gamma_in)} inside / γ={self._fmt(gam.gamma_out)} outside)",
-            f"Derivative direction η\n({n} sphere{'s' if n != 1 else ''} "
-            f"r={self._fmt(eta.radius)} at {centers},\n"
-            f"η={self._fmt(eta.eta_in)} inside / η={self._fmt(eta.eta_out)} outside)",
+            f"Condutividade γ\nesfera r={self._fmt(gam.radius)}, "
+            f"γ={self._fmt(gam.gamma_in)} dentro e {self._fmt(gam.gamma_out)} fora",
+            f"Direção η\n{n} esfera{'s' if n != 1 else ''} r={self._fmt(eta.radius)} em {centers}",
         ]
 
     def _forward_titles(self, pattern: int) -> List[str]:
         g_top, g_bot = self._config.current.patterns[pattern]
         x0 = self._fmt(self._config.conductivity.center[0])
         return [
-            "u_γ: cylinder surface\n"
-            f"(forward problem with γ, g={g_top:+g} top / g={g_bot:+g} base)",
-            f"u_γ: cross-section at x={x0}\n(white circle = sphere boundary)",
+            f"Potencial na superfície\ng={g_top:+g} no topo, g={g_bot:+g} na base",
+            f"Corte em x = {x0}\ncírculo: borda da esfera",
         ]
 
     # Image builders
@@ -308,28 +294,37 @@ class StaticRenderer(BaseRenderer):
         p.set_background(self.BG)
         return p
 
-    @staticmethod
-    def _snap(p: pyvista.Plotter) -> np.ndarray:
+    @classmethod
+    def _snap(cls, p: pyvista.Plotter) -> np.ndarray:
         img = p.screenshot(return_img=True)
         p.close()
-        return img
+        return cls._trim(img)
 
-    def _geometry_image(self, meshes, label: str) -> np.ndarray:
+    @staticmethod
+    def _trim(img: np.ndarray, margin: int = 12) -> np.ndarray:
+        content = np.any(img < 250, axis=2)
+        rows = np.where(content.any(axis=1))[0]
+        cols = np.where(content.any(axis=0))[0]
+        if rows.size == 0:
+            return img
+        r0, r1 = max(rows[0] - margin, 0), min(rows[-1] + margin + 1, img.shape[0])
+        c0, c1 = max(cols[0] - margin, 0), min(cols[-1] + margin + 1, img.shape[1])
+        return img[r0:r1, c0:c1]
+
+    def _geometry_image(self, spheres) -> np.ndarray:
         p = self._plotter()
-        for mesh, color, opacity in meshes:
-            p.add_mesh(mesh, color=color, opacity=opacity,
-                        show_edges=False, lighting=True, smooth_shading=True)
-        p.add_text(label, position="lower_left", font_size=12, color="white")
+        p.add_mesh(self._cylinder(), color="#c9d3df", opacity=0.25, smooth_shading=True)
+        p.add_mesh(self._cylinder().extract_feature_edges(), color="#5b6b80", line_width=1.5)
+        for mesh, color in spheres:
+            p.add_mesh(mesh, color=color, smooth_shading=True, specular=0.2)
         p.view_isometric()
-        p.camera.zoom(1.1)
         return self._snap(p)
 
-    def _surface_image(self, grid, scalar: str, cmap: str, clim, bar: str) -> np.ndarray:
+    def _surface_image(self, grid, scalar: str, cmap: str, clim) -> np.ndarray:
         p = self._plotter()
         p.add_mesh(grid.extract_surface(algorithm="dataset_surface"),
-                    scalars=scalar, cmap=cmap, clim=clim,
-                    show_edges=False, lighting=True, smooth_shading=True,
-                    show_scalar_bar=True, scalar_bar_args=self._scalar_bar_args(bar))
+                    scalars=scalar, cmap=cmap, clim=clim, show_scalar_bar=False,
+                    smooth_shading=True, ambient=0.55, diffuse=0.5, specular=0.0)
         p.view_isometric()
         return self._snap(p)
 
@@ -338,7 +333,6 @@ class StaticRenderer(BaseRenderer):
         axis: str, plane: float, overlays: Sequence[pyvista.PolyData] = (),
         bar: Optional[str] = None,
     ) -> np.ndarray:
-        """Clip the domain by the plane {axis = plane} and look at the cut face."""
         idx = AXES[axis]
         origin = [0.0, 0.0, 0.0]
         origin[idx] = plane
@@ -347,19 +341,16 @@ class StaticRenderer(BaseRenderer):
 
         p = self._plotter()
         p.add_mesh(grid.clip(normal=axis, origin=origin),
-                    scalars=scalar, cmap=cmap, clim=clim,
-                    show_edges=False, lighting=True, smooth_shading=True,
-                    show_scalar_bar=bar is not None,
-                    scalar_bar_args=self._scalar_bar_args(bar) if bar is not None else None)
+                    scalars=scalar, cmap=cmap, clim=clim, show_scalar_bar=False, lighting=False)
         for overlay in overlays:
             if overlay.n_points:
-                p.add_mesh(overlay, color="white", line_width=3)
+                p.add_mesh(overlay, color="#111111", line_width=2.5, lighting=False)
         p.camera_position = [tuple(eye), tuple(origin), (0.0, 0.0, 1.0)]
-        p.camera.zoom(1.4)
+        p.enable_parallel_projection()
+        p.reset_camera()
         return self._snap(p)
 
     def _inclusion_section_image(self, grid, scalar: str, cmap: str, clim) -> np.ndarray:
-        """Section x = x_center through the conductivity inclusion, with its contour."""
         gam = self._config.conductivity
         plane = float(gam.center[AXES["x"]])
         circle = self._section_circle(gam.center, gam.radius, AXES["x"], plane)
@@ -367,38 +358,56 @@ class StaticRenderer(BaseRenderer):
 
     # Figure assembly
     def _compose(
-        self, images: Sequence[np.ndarray], titles: Sequence[str], filename: str,
-        ncols: Optional[int] = None,
+        self, panels: Sequence[_Panel], filename: str,
+        ncols: Optional[int] = None, width: float = 4.8,
+        shared_bar: Optional[Tuple[str, Tuple[float, float], str]] = None,
     ) -> Path:
-        n = len(images)
+        n = len(panels)
         ncols = n if ncols is None else min(ncols, n)
         nrows = int(np.ceil(n / ncols))
-        fig, axes = plt.subplots(nrows, ncols, figsize=(8 * ncols, 8 * nrows), facecolor=self.BG)
-        axes = np.atleast_1d(axes).ravel()
-        for ax in axes:
-            ax.axis("off")
-            ax.set_facecolor(self.BG)
-        for ax, img, title in zip(axes, images, titles):
-            ax.imshow(img)
-            ax.set_title(title, color="white", fontsize=13, pad=8)
-        plt.tight_layout(pad=0.3)
-        return self._save(fig, filename)
+        with plt.rc_context(STYLE):
+            fig, axes = plt.subplots(
+                nrows, ncols, figsize=(width * ncols, width * 1.05 * nrows), layout="constrained", squeeze=False,
+            )
+            axes = axes.ravel()
+            for ax in axes:
+                ax.axis("off")
+            for ax, panel in zip(axes, panels):
+                ax.imshow(panel.image)
+                ax.set_title(panel.title, fontsize=11)
+                if panel.cmap is not None and panel.clim is not None:
+                    self._colorbar(fig, ax, panel.cmap, panel.clim, panel.label, shrink=0.8)
+            if shared_bar is not None:
+                without_bar = [ax for ax, p in zip(axes, panels) if p.cmap is None]
+                self._colorbar(fig, without_bar, *shared_bar, shrink=0.5)
+            return self._save(fig, filename)
+
+    @staticmethod
+    def _colorbar(fig, ax, cmap: str, clim: Tuple[float, float], label: Optional[str], shrink: float) -> None:
+        mappable = ScalarMappable(norm=Normalize(*clim), cmap=cmap)
+        bar = fig.colorbar(mappable, ax=ax, fraction=0.045, pad=0.02, shrink=shrink)
+        bar.outline.set_visible(False)
+        bar.ax.tick_params(labelsize=9)
+        if label:
+            bar.ax.set_title(label, fontsize=11, pad=6)
+
+    @staticmethod
+    def _math_title(title: str) -> str:
+        match = re.fullmatch(r"γ_(\d+)", title)
+        return rf"$\gamma_{{{match.group(1)}}}$" if match else title
 
     def _save(self, fig, filename: str) -> Path:
         out = self._output_dir / filename
-        fig.savefig(str(out), dpi=150, bbox_inches="tight", facecolor=self.BG)
+        fig.savefig(str(out), dpi=self.DPI, facecolor="white")
         plt.close(fig)
         logger.info("Saved: %s", out)
         return out
 
-    def _style_axes(self, ax) -> None:
-        ax.set_facecolor(self.BG)
-        ax.tick_params(colors="white")
-        ax.legend(facecolor=self.BG, edgecolor="#4a4a6a", labelcolor="white", fontsize=11)
-        for spine in ax.spines.values():
-            spine.set_edgecolor("#4a4a6a")
-        ax.grid(True, color="#4a4a6a", linestyle="--", alpha=0.4)
-
     @staticmethod
     def _clim(grid, scalar: str) -> Tuple[float, float]:
         return float(grid[scalar].min()), float(grid[scalar].max())
+
+    @staticmethod
+    def _symmetric_clim(grid, scalar: str) -> Tuple[float, float]:
+        m = float(np.abs(grid[scalar]).max())
+        return -m, m
