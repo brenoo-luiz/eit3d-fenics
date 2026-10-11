@@ -60,7 +60,7 @@ def main() -> None:
 
     n_iter = cfg.consistency.n_iter
     report.section(f"Teste de consistência: {n_iter} perturbações γ + tη, com t = {base:g}ⁿ")
-    print("  y = erro entre a derivada numérica e ω (deve diminuir junto com t)")
+    print("  y = erro entre a derivada numérica e ω")
     print(f"  {'n':>5}  {'t':>9}  {'y':>9}")
 
     V = pipe.get_function_space()
