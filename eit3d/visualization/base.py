@@ -20,7 +20,7 @@ class BaseRenderer:
     def config(self) -> EITConfig:
         return self._config
 
-    # Geometry built from the config
+
     def _cylinder(self) -> pyvista.PolyData:
         """Cylinder surface matching the mesh domain (centered at the origin)."""
         return pyvista.Cylinder(

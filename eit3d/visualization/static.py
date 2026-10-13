@@ -4,13 +4,16 @@ import logging
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional, Sequence, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pyvista
+from matplotlib import font_manager
 from matplotlib.cm import ScalarMappable
 from matplotlib.colors import Normalize
+from matplotlib.lines import Line2D
+from matplotlib.ticker import FuncFormatter, LogLocator, NullLocator
 
 from eit3d.config import OUTPUTS_DIR, EITConfig
 from eit3d.visualization.base import BaseRenderer
@@ -18,34 +21,47 @@ from eit3d.visualization.base import BaseRenderer
 logger = logging.getLogger(__name__)
 
 AXES = {"x": 0, "y": 1, "z": 2}
+SUBSCRIPTS = str.maketrans("0123456789", "₀₁₂₃₄₅₆₇₈₉")
 
-PRIMARY = "#1f3a68"
-ACCENT = "#c0392b"
-MUTED = "#8a8f98"
-TEXT = "#222222"
+INK = "#1d1d1f"
+INK_SOFT = "#5f6368"
+INK_FAINT = "#9aa0a6"
+GRID = "#e8e8e8"
+BLUE = "#2a78d6"
+ORANGE = "#eb6834"
+GREY = "#c4c7cc"
+GLASS = "#cfd8e3"
+RIM = "#8a9099"
+
+FONT = "Inter" if any(f.name == "Inter" for f in font_manager.fontManager.ttflist) else "DejaVu Sans"
 
 STYLE = {
-    "figure.facecolor": "white",
-    "axes.facecolor": "white",
-    "axes.edgecolor": "#444444",
-    "axes.labelcolor": TEXT,
-    "axes.titlesize": 13,
-    "axes.labelsize": 12,
+    "font.family": FONT,
+    "font.size": 11,
+    "text.color": INK,
+    "axes.labelcolor": INK_SOFT,
+    "axes.labelsize": 10.5,
+    "axes.edgecolor": INK_FAINT,
+    "axes.linewidth": 0.8,
     "axes.spines.top": False,
     "axes.spines.right": False,
+    "axes.spines.left": False,
     "axes.grid": True,
-    "axes.grid.which": "major",
-    "grid.color": "#d9d9d9",
-    "grid.linestyle": "--",
-    "grid.linewidth": 0.6,
-    "xtick.color": TEXT,
-    "ytick.color": TEXT,
-    "xtick.labelsize": 10,
-    "ytick.labelsize": 10,
+    "axes.grid.axis": "y",
+    "grid.color": GRID,
+    "grid.linewidth": 0.8,
+    "xtick.color": INK_SOFT,
+    "ytick.color": INK_SOFT,
+    "xtick.labelsize": 9.5,
+    "ytick.labelsize": 9.5,
+    "ytick.left": False,
+    "xtick.major.size": 3,
     "legend.frameon": False,
-    "legend.fontsize": 10,
-    "font.size": 11,
-    "text.color": TEXT,
+    "mathtext.fontset": "custom",
+    "mathtext.rm": FONT,
+    "mathtext.it": f"{FONT}:italic",
+    "mathtext.cal": FONT,
+    "figure.facecolor": "white",
 }
 
 
@@ -74,6 +90,7 @@ class StaticRenderer(BaseRenderer):
     BG = "white"
     WINDOW_SIZE = (1100, 1100)
     DPI = 300
+    CAMERA = [(5.2, -6.6, 2.6), (0.0, 0.0, 0.0), (0.0, 0.0, 1.0)]
 
     def __init__(self, config: EITConfig, output_dir: Path = OUTPUTS_DIR) -> None:
         super().__init__(config)
@@ -83,20 +100,47 @@ class StaticRenderer(BaseRenderer):
     # Public figures
     def render_mesh(self, grid: pyvista.UnstructuredGrid, filename: str = "step1_mesh.png") -> Path:
         p = self._plotter()
-        p.add_mesh(grid, color="#e8edf3", show_edges=True, edge_color=PRIMARY, line_width=0.3)
-        p.view_isometric()
+        p.add_mesh(grid, color="#f4f6f9", show_edges=True, edge_color="#8fb3e3", line_width=0.3,
+                    ambient=0.6, diffuse=0.45, specular=0.0)
+        self._frame(p)
         mesh = self._config.mesh
         return self._compose(
-            [_Panel(self._snap(p), f"Malha  (raio {self._fmt(mesh.radius)}, altura {self._fmt(mesh.height)})")],
+            [_Panel(self._snap(p), f"Malha\nraio {self._fmt(mesh.radius)}, altura {self._fmt(mesh.height)}")],
             filename, width=6,
         )
 
     def render_geometry(self, filename: str = "step3_a_geometry.png") -> Path:
         gam, eta = self._config.conductivity, self._config.eta
         left, right = self._geometry_titles()
-        img_gamma = self._geometry_image([(self._sphere(gam.center, gam.radius), ACCENT)])
-        img_eta = self._geometry_image([(self._sphere(c, eta.radius), "#2e7d4f") for c in eta.centers])
+        img_gamma = self._geometry_image([(self._sphere(gam.center, gam.radius), BLUE)])
+        img_eta = self._geometry_image([(self._sphere(c, eta.radius), ORANGE) for c in eta.centers])
         return self._compose([_Panel(img_gamma, left), _Panel(img_eta, right)], filename)
+
+    def render_inclusions(
+        self,
+        centers: Sequence[Sequence[float]],
+        radius: float,
+        inside: float,
+        outside: float,
+        filename: str,
+        title: str = "Condutividade verdadeira γ⁺",
+    ) -> Path:
+        image = self._geometry_image([(self._sphere(c, radius), BLUE) for c in centers])
+        with plt.rc_context(STYLE):
+            fig = plt.figure(figsize=(7, 7.8))
+            self._header(fig, title)
+            ax = fig.add_axes([0.07, 0.08, 0.86, 0.82])
+            ax.imshow(image)
+            ax.axis("off")
+            handles = [
+                Line2D([], [], marker="o", linestyle="", markersize=11, markerfacecolor=BLUE,
+                        markeredgewidth=0, label=f"esferas  γ = {self._fmt(inside)}"),
+                Line2D([], [], marker="o", linestyle="", markersize=11, markerfacecolor="#e3e7ec",
+                        markeredgecolor=INK_FAINT, label=f"cilindro  γ = {self._fmt(outside)}"),
+            ]
+            ax.legend(handles=handles, loc="upper center", bbox_to_anchor=(0.5, -0.005), ncol=2,
+                        fontsize=10, labelcolor=INK_SOFT, handletextpad=0.4, columnspacing=2.2)
+            return self._save(fig, filename)
 
     def render_forward(
         self,
@@ -124,15 +168,15 @@ class StaticRenderer(BaseRenderer):
     ) -> Path:
         gam = self._config.conductivity
         clim = self._clim(grid, scalar)
-        img_geo = self._geometry_image([(self._sphere(gam.center, gam.radius), ACCENT)])
+        img_geo = self._geometry_image([(self._sphere(gam.center, gam.radius), BLUE)])
         return self._compose(
             [
-                _Panel(img_geo, f"Condutividade  (γ={self._fmt(gam.gamma_in)} na esfera, "
-                                f"{self._fmt(gam.gamma_out)} fora)"),
-                _Panel(self._surface_image(grid, scalar, "coolwarm", clim), "Potencial u na superfície",
+                _Panel(img_geo, f"Condutividade\nγ = {self._fmt(gam.gamma_in)} na esfera, "
+                                f"{self._fmt(gam.gamma_out)} fora"),
+                _Panel(self._surface_image(grid, scalar, "coolwarm", clim), "Potencial u\nsuperfície",
                         "coolwarm", clim, "u"),
                 _Panel(self._inclusion_section_image(grid, scalar, "coolwarm", clim),
-                        f"Corte em x = {self._fmt(gam.center[0])}", "coolwarm", clim, "u"),
+                        f"Potencial u\ncorte em x = {self._fmt(gam.center[0])}", "coolwarm", clim, "u"),
             ],
             filename,
         )
@@ -152,9 +196,9 @@ class StaticRenderer(BaseRenderer):
         return self._compose(
             [
                 _Panel(self._surface_image(grid, scalar, "RdBu_r", clim),
-                        f"Derivada ω na superfície  (∫ω ds = {integral:.1e})", "RdBu_r", clim, "ω"),
+                        f"Derivada ω\nsuperfície, ∫ω ds = {integral:.1e}", "RdBu_r", clim, "ω"),
                 _Panel(self._section_image(grid, scalar, "RdBu_r", clim, axis="y", plane=plane, overlays=overlays),
-                        f"Corte em y = {self._fmt(plane)}  (círculos: esferas de η)", "RdBu_r", clim, "ω"),
+                        f"Derivada ω\ncorte em y = {self._fmt(plane)}, círculos: esferas de η", "RdBu_r", clim, "ω"),
             ],
             filename,
         )
@@ -179,31 +223,40 @@ class StaticRenderer(BaseRenderer):
         filename: str = "step3_d_consistency.png",
     ) -> Path:
         ns = np.arange(len(y_vals))
-        base = self._fmt(self._config.consistency.base)
         n_fit = len(fit_line)
+        theory = t_vals * y_vals[0] / t_vals[0]
 
         with plt.rc_context(STYLE):
-            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4.6), layout="constrained")
+            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11, 4.6))
+            fig.subplots_adjust(left=0.08, right=0.9, top=0.78, bottom=0.14, wspace=0.32)
+            self._header(fig, f"Teste da derivada  ·  t = {self._fmt(self._config.consistency.base)}ⁿ")
 
-            ax1.semilogy(ns, y_vals, "o-", color=PRIMARY, markersize=3, linewidth=1, label="$y_n$")
-            ax1.semilogy(idx_min, y_vals[idx_min], "o", markersize=8, markerfacecolor="none",
-                        markeredgecolor=ACCENT, markeredgewidth=1.5,
-                        label=f"mínimo: $y_{{{idx_min}}}$ = {y_vals[idx_min]:.1e}")
-            ax1.set_xlabel("Índice $n$")
-            ax1.set_ylabel("$y_n$")
-            ax1.set_title(f"Teste de consistência  ($t_n = {base}^n$)")
-            ax1.legend()
+            ax1.semilogy(ns, y_vals, color=BLUE, linewidth=1.6, marker="o", markersize=2.5, zorder=3)
+            ax1.plot(idx_min, y_vals[idx_min], "o", markersize=8, markerfacecolor="white",
+                        markeredgecolor=INK, markeredgewidth=1.2, zorder=4)
+            ax1.annotate(f"mínimo  {y_vals[idx_min]:.1e}", (idx_min, y_vals[idx_min]), xytext=(-10, -10),
+                            textcoords="offset points", ha="right", va="top", fontsize=9, color=INK)
+            self._panel(ax1, "Erro por perturbação", "yₙ")
+            ax1.set_xlabel("n")
+            ax1.set_xlim(0, ns[-1])
+            ax1.set_ylim(y_vals.min() * 0.08, y_vals.max() * 3)
+            ax1.yaxis.set_minor_locator(NullLocator())
 
-            ax2.loglog(t_vals, y_vals, "o", color=PRIMARY, markersize=3, label="$y_n$")
-            ax2.loglog(t_vals[:n_fit], 10 ** fit_line, "-", color=ACCENT, linewidth=1.5,
-                        label=f"ajuste: inclinação {slope:.3f}")
-            ax2.loglog(t_vals, t_vals * y_vals[0] / t_vals[0], ":", color=MUTED, linewidth=1.2,
-                        label="inclinação 1 (teoria)")
+            ax2.grid(True, axis="both")
+            ax2.loglog(t_vals, theory, color=INK_FAINT, linewidth=0.9, linestyle=(0, (4, 3)), zorder=2)
+            ax2.loglog(t_vals, y_vals, "o", color=BLUE, markersize=3, markeredgewidth=0, alpha=0.85, zorder=3)
+            ax2.loglog(t_vals[:n_fit], 10 ** fit_line, color=INK, linewidth=1.3, zorder=4)
             ax2.invert_xaxis()
-            ax2.set_xlabel("$t_n$")
-            ax2.set_ylabel("$y_n$")
-            ax2.set_title("Taxa de convergência")
-            ax2.legend()
+            mid = n_fit // 2
+            ax2.annotate(f"inclinação {slope:.3f}", (t_vals[mid], 10 ** fit_line[mid]), xytext=(10, 10),
+                            textcoords="offset points", ha="left", va="bottom", fontsize=9.5, color=INK, fontweight="bold")
+            ax2.annotate("teoria: inclinação 1", (t_vals[-1], theory[-1]), xytext=(-4, -8), textcoords="offset points",
+                            ha="right", va="top", fontsize=8.5, color=INK_SOFT)
+            ax2.set_ylim(min(y_vals.min(), theory.min()) * 0.08, y_vals.max() * 3)
+            ax2.xaxis.set_minor_locator(NullLocator())
+            ax2.yaxis.set_minor_locator(NullLocator())
+            self._panel(ax2, "Taxa de convergência", "yₙ")
+            ax2.set_xlabel("t")
             return self._save(fig, filename)
 
     def render_inversion_history(
@@ -214,26 +267,60 @@ class StaticRenderer(BaseRenderer):
         filename: str,
         floor: Optional[float] = None,
     ) -> Path:
-        ks = np.arange(len(residuals))
+        res = np.asarray(residuals)
+        err = np.asarray(errors)
+        ks = np.arange(len(res))
         with plt.rc_context(STYLE):
-            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4.6), layout="constrained")
-            fig.suptitle(f"Método do gradiente,  λ = {step:g}", fontsize=14)
+            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11, 4.6))
+            fig.subplots_adjust(left=0.08, right=0.92, top=0.78, bottom=0.14, wspace=0.3)
+            self._header(fig, f"Método do gradiente  ·  λ = {step:g}")
 
-            ax1.semilogy(ks, residuals, "-", color=PRIMARY, linewidth=1.6, label="resíduo")
+            ax1.semilogy(ks, res, color=BLUE, linewidth=2, zorder=3)
+            self._end_label(ax1, ks[-1], res[-1], f"{res[-1]:.3g}", BLUE, bold=True)
+            self._log_axis(ax1, res if floor is None else np.append(res, floor))
             if floor is not None:
-                ax1.axhline(floor, color=MUTED, linestyle="--", linewidth=1,
-                            label=f"resíduo de γ⁺  ({floor:.1e})")
-            ax1.set_title(r"Resíduo  $\|F_G(\gamma_k) - \tilde u\|$")
-            ax1.set_ylabel("resíduo")
+                self._floor(ax1, ks[-1], floor, above=res[-1] < floor)
+                crossing = np.flatnonzero(res < floor)
+                if crossing.size:
+                    self._mark_crossing(ax1, int(crossing[0]), int(ks[-1]), floor)
+            self._panel(ax1, "Resíduo", "‖F(γₖ) − ũ‖")
 
-            ax2.plot(ks, errors, "-", color=ACCENT, linewidth=1.6, label="erro relativo")
-            ax2.set_title(r"Erro relativo  $\|\gamma^+ - \gamma_k\| \,/\, \|\gamma^+\|$")
-            ax2.set_ylabel("erro relativo")
+            ax2.plot(ks, err, color=ORANGE, linewidth=2, zorder=3)
+            self._end_label(ax2, ks[-1], err[-1], f"{err[-1]:.3f}", ORANGE, bold=True)
+            self._panel(ax2, "Erro relativo", "‖γ⁺ − γₖ‖ / ‖γ⁺‖")
 
             for ax in (ax1, ax2):
-                ax.set_xlabel("Iteração $k$")
                 ax.set_xlim(0, ks[-1])
-                ax.legend(loc="upper right")
+                ax.set_xlabel("iteração k")
+            return self._save(fig, filename)
+
+    def render_step_comparison(
+        self,
+        residuals: Dict[float, np.ndarray],
+        filename: str,
+        floor: Optional[float] = None,
+    ) -> Path:
+        highlight = max(residuals)
+        k_max = max(len(r) for r in residuals.values()) - 1
+        with plt.rc_context(STYLE):
+            fig, ax = plt.subplots(figsize=(9, 5.4))
+            fig.subplots_adjust(left=0.11, right=0.86, top=0.86, bottom=0.12)
+            self._header(fig, "Resíduo para diferentes passos λ")
+            values = []
+            for step in sorted(residuals):
+                res = np.asarray(residuals[step])
+                main = step == highlight
+                ax.semilogy(np.arange(len(res)), res, color=BLUE if main else GREY,
+                            linewidth=2.4 if main else 1.6, zorder=3 if main else 2)
+                self._end_label(ax, len(res) - 1, res[-1], f"λ = {step:g}", BLUE if main else INK_SOFT, bold=main)
+                values.append(res)
+            if floor is not None:
+                self._floor(ax, k_max, floor)
+                values.append([floor])
+            self._log_axis(ax, np.concatenate(values))
+            ax.set_xlim(0, k_max)
+            ax.set_xlabel("iteração k")
+            ax.set_ylabel("‖F(γₖ) − ũ‖")
             return self._save(fig, filename)
 
     def render_conductivity_sections(
@@ -288,14 +375,58 @@ class StaticRenderer(BaseRenderer):
             f"Corte em x = {x0}\ncírculo: borda da esfera",
         ]
 
+    # Line plot helpers
+    @staticmethod
+    def _header(fig, title: str) -> None:
+        fig.text(0.04, 0.95, title, fontsize=14, fontweight="bold", color=INK, ha="left", va="top")
+
+    @staticmethod
+    def _panel(ax, title: str, ylabel: str) -> None:
+        ax.set_title(title, loc="left", fontsize=11.5, fontweight="bold", color=INK, pad=10)
+        ax.set_ylabel(ylabel)
+
+    @staticmethod
+    def _end_label(ax, x: float, y: float, text: str, color: str, bold: bool = False) -> None:
+        ax.annotate(text, (x, y), xytext=(6, 0), textcoords="offset points", va="center", ha="left",
+                    fontsize=9.5, color=color, fontweight="bold" if bold else "normal", annotation_clip=False)
+
+    @staticmethod
+    def _floor(ax, x_end: float, floor: float, above: bool = False) -> None:
+        ax.axhline(floor, color=INK_FAINT, linewidth=0.9, linestyle=(0, (4, 3)), zorder=1)
+        y, va = (floor * 1.06, "bottom") if above else (floor * 0.94, "top")
+        ax.text(x_end, y, "resíduo da solução exata γ⁺", fontsize=8.5, color=INK_SOFT, ha="right", va=va)
+
+    @staticmethod
+    def _mark_crossing(ax, k: int, k_end: int, floor: float) -> None:
+        ax.fill_between([k, k_end], ax.get_ylim()[0], floor, color=BLUE, alpha=0.06, linewidth=0, zorder=0)
+        offset, rad = ((45, 55), 0.25) if k < 0.6 * k_end else ((-90, 55), -0.25)
+        ax.annotate(f"k = {k}", xy=(k, floor), xytext=offset, textcoords="offset points",
+                    fontsize=10, color=INK, fontweight="bold",
+                    arrowprops=dict(arrowstyle="-|>", color=INK, linewidth=0.9,
+                                    connectionstyle=f"arc3,rad={rad}", shrinkB=4))
+
+    @staticmethod
+    def _log_axis(ax, values: np.ndarray) -> None:
+        values = np.asarray(values, dtype=float)
+        ax.set_ylim(values.min() * 0.7, values.max() * 1.3)
+        ax.yaxis.set_major_locator(LogLocator(subs=(1.0, 2.0, 5.0)))
+        ax.yaxis.set_minor_locator(NullLocator())
+        ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:g}"))
+
     # Image builders
     def _plotter(self, window_size=None) -> pyvista.Plotter:
         p = pyvista.Plotter(off_screen=True, window_size=window_size or self.WINDOW_SIZE)
         p.set_background(self.BG)
         return p
 
+    def _frame(self, p: pyvista.Plotter) -> None:
+        p.camera_position = self.CAMERA
+        p.camera.view_angle = 20
+        p.reset_camera()
+
     @classmethod
     def _snap(cls, p: pyvista.Plotter) -> np.ndarray:
+        p.enable_anti_aliasing("ssaa")
         img = p.screenshot(return_img=True)
         p.close()
         return cls._trim(img)
@@ -312,12 +443,15 @@ class StaticRenderer(BaseRenderer):
         return img[r0:r1, c0:c1]
 
     def _geometry_image(self, spheres) -> np.ndarray:
+        mesh = self._config.mesh
         p = self._plotter()
-        p.add_mesh(self._cylinder(), color="#c9d3df", opacity=0.25, smooth_shading=True)
-        p.add_mesh(self._cylinder().extract_feature_edges(), color="#5b6b80", line_width=1.5)
-        for mesh, color in spheres:
-            p.add_mesh(mesh, color=color, smooth_shading=True, specular=0.2)
-        p.view_isometric()
+        p.add_mesh(self._cylinder(), color=GLASS, opacity=0.10, smooth_shading=True, specular=0.2)
+        for z in (-mesh.height / 2, mesh.height / 2):
+            rim = pyvista.Polygon(center=(0.0, 0.0, z), radius=mesh.radius, n_sides=200, fill=False)
+            p.add_mesh(rim, color=RIM, line_width=2.5)
+        for sphere, color in spheres:
+            p.add_mesh(sphere, color=color, smooth_shading=True, specular=0.5, specular_power=30)
+        self._frame(p)
         return self._snap(p)
 
     def _surface_image(self, grid, scalar: str, cmap: str, clim) -> np.ndarray:
@@ -325,7 +459,7 @@ class StaticRenderer(BaseRenderer):
         p.add_mesh(grid.extract_surface(algorithm="dataset_surface"),
                     scalars=scalar, cmap=cmap, clim=clim, show_scalar_bar=False,
                     smooth_shading=True, ambient=0.55, diffuse=0.5, specular=0.0)
-        p.view_isometric()
+        self._frame(p)
         return self._snap(p)
 
     def _section_image(
@@ -367,34 +501,52 @@ class StaticRenderer(BaseRenderer):
         nrows = int(np.ceil(n / ncols))
         with plt.rc_context(STYLE):
             fig, axes = plt.subplots(
-                nrows, ncols, figsize=(width * ncols, width * 1.05 * nrows), layout="constrained", squeeze=False,
+                nrows, ncols, figsize=(width * ncols, width * 1.1 * nrows), layout="constrained", squeeze=False,
             )
             axes = axes.ravel()
             for ax in axes:
                 ax.axis("off")
+            ratio = max(p.image.shape[0] / p.image.shape[1] for p in panels)
             for ax, panel in zip(axes, panels):
-                ax.imshow(panel.image)
-                ax.set_title(panel.title, fontsize=11)
+                ax.imshow(self._pad_to_ratio(panel.image, ratio))
+                self._panel_title(ax, panel.title)
                 if panel.cmap is not None and panel.clim is not None:
-                    self._colorbar(fig, ax, panel.cmap, panel.clim, panel.label, shrink=0.8)
+                    self._colorbar(fig, ax, panel.cmap, panel.clim, panel.label, shrink=0.7)
             if shared_bar is not None:
                 without_bar = [ax for ax, p in zip(axes, panels) if p.cmap is None]
                 self._colorbar(fig, without_bar, *shared_bar, shrink=0.5)
             return self._save(fig, filename)
 
     @staticmethod
+    def _pad_to_ratio(img: np.ndarray, ratio: float) -> np.ndarray:
+        """Pads the bottom with background so every panel has the same height/width ratio."""
+        missing = int(round(ratio * img.shape[1])) - img.shape[0]
+        if missing <= 0:
+            return img
+        pad = np.full((missing, img.shape[1], img.shape[2]), 255, dtype=img.dtype)
+        return np.vstack([img, pad])
+
+    @staticmethod
+    def _panel_title(ax, title: str) -> None:
+        main, _, detail = title.partition("\n")
+        ax.set_title(main, loc="left", fontsize=11.5, fontweight="bold", color=INK, pad=18 if detail else 8)
+        if detail:
+            ax.text(0.0, 1.0, detail, transform=ax.transAxes, ha="left", va="bottom",
+                    fontsize=9, color=INK_SOFT)
+
+    @staticmethod
     def _colorbar(fig, ax, cmap: str, clim: Tuple[float, float], label: Optional[str], shrink: float) -> None:
         mappable = ScalarMappable(norm=Normalize(*clim), cmap=cmap)
-        bar = fig.colorbar(mappable, ax=ax, fraction=0.045, pad=0.02, shrink=shrink)
+        bar = fig.colorbar(mappable, ax=ax, fraction=0.04, pad=0.02, shrink=shrink, aspect=30)
         bar.outline.set_visible(False)
-        bar.ax.tick_params(labelsize=9)
+        bar.ax.tick_params(labelsize=8.5, colors=INK_SOFT, length=0)
         if label:
-            bar.ax.set_title(label, fontsize=11, pad=6)
+            bar.ax.set_title(label, fontsize=10, color=INK_SOFT, pad=6)
 
     @staticmethod
     def _math_title(title: str) -> str:
         match = re.fullmatch(r"γ_(\d+)", title)
-        return rf"$\gamma_{{{match.group(1)}}}$" if match else title
+        return "γ" + match.group(1).translate(SUBSCRIPTS) if match else title
 
     def _save(self, fig, filename: str) -> Path:
         out = self._output_dir / filename

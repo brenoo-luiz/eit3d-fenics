@@ -125,7 +125,7 @@ def main() -> None:
 
     report.result(
         ok_u and ok_omega and ok_slope,
-        "derivada correta (o erro cai na mesma proporção que t)",
+        "derivada correta",
         "derivada com problema",
     )
     report.files(outputs)

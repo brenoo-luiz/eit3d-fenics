@@ -3,8 +3,8 @@ import pytest
 
 pyvista = pytest.importorskip("pyvista")
 
-from eit3d.config import ConductivityConfig, EITConfig, EtaConfig, MeshConfig  # noqa: E402
-from eit3d.visualization import (  # noqa: E402
+from eit3d.config import ConductivityConfig, EITConfig, EtaConfig, MeshConfig
+from eit3d.visualization import (
     BaseRenderer, InteractiveRenderer, StaticRenderer, SurfacePanel,
 )
 
@@ -29,7 +29,6 @@ def test_renderers_share_base():
     assert issubclass(InteractiveRenderer, BaseRenderer)
 
 
-# Titles and geometry come from the config
 def test_geometry_titles_follow_config(tmp_path):
     cfg = EITConfig(
         conductivity=ConductivityConfig(radius=0.5, gamma_in=3.0),
@@ -56,7 +55,7 @@ def test_cylinder_matches_mesh_config(tmp_path):
 def test_section_circle_radius():
     circle = BaseRenderer._section_circle((0.0, 0.0, 0.0), 0.5, axis=0, plane=0.3)
     radii = np.linalg.norm(circle.points[:, 1:], axis=1)
-    assert np.allclose(radii, 0.4, atol=1e-2)       # sqrt(0.5^2 - 0.3^2)
+    assert np.allclose(radii, 0.4, atol=1e-2)
     assert np.allclose(circle.points[:, 0], 0.3)
 
 
@@ -95,3 +94,25 @@ def test_static_figures(tmp_path, mesh_data):
     for out in outputs:
         assert out.exists() and out.stat().st_size > 0
     assert not list(tmp_path.glob("_tmp_*")), "temporary files left behind"
+
+def test_inversion_figures(tmp_path):
+    """Matplotlib only"""
+    k = np.arange(201)
+    res = 0.01 + 0.15 * np.exp(-k / 20)
+    err = 0.7 + 0.05 * np.exp(-k / 30)
+    renderer = StaticRenderer(EITConfig(), tmp_path)
+    outputs = [
+        renderer.render_inversion_history(res, err, 1.0, "history.png", floor=0.02),
+        renderer.render_inversion_history(res, err, 1.0, "history_no_floor.png"),
+        renderer.render_step_comparison({1.0: res, 0.1: res + 0.02}, "comparison.png", floor=0.02),
+    ]
+    for out in outputs:
+        assert out.exists() and out.stat().st_size > 0
+
+
+@requires_rendering
+def test_inclusions_figure(tmp_path):
+    out = StaticRenderer(EITConfig(), tmp_path).render_inclusions(
+        ((0.4, 0.0, 0.4), (-0.4, 0.0, -0.4)), 0.25, 10.0, 1.0, "inclusions.png",
+    )
+    assert out.exists() and out.stat().st_size > 0

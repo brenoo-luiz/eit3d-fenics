@@ -130,7 +130,7 @@ def main() -> None:
 
     renderer = StaticRenderer(cfg, OUTPUTS_DIR)
     spheres = [(c, TRUE_RADIUS) for c in TRUE_CENTERS]
-    outputs = []
+    outputs = [renderer.render_inclusions(TRUE_CENTERS, TRUE_RADIUS, TRUE_VALUE, BACKGROUND, "step6_gamma_true.png")]
     for step, result in results.items():
         outputs.append(renderer.render_inversion_history(
             result.residuals, result.errors, step, f"step6_convergence_lambda_{step:g}_k{args.iterations}.png", floor=floor,
@@ -144,6 +144,12 @@ def main() -> None:
         clims = [(BACKGROUND, TRUE_VALUE)] + [(low, high)] * len(snapshots)
         outputs.append(renderer.render_conductivity_sections(
             fields, f"step6_gamma_lambda_{step:g}_k{args.iterations}.png", spheres=spheres, axis="y", plane=0.0, clims=clims,
+        ))
+
+    stable_steps = {step: r.residuals for step, r in results.items() if r.failure is None}
+    if len(stable_steps) > 1:
+        outputs.append(renderer.render_step_comparison(
+            stable_steps, f"step6_comparison_k{args.iterations}.png", floor=floor,
         ))
 
     stable = [r for r in results.values() if r.failure is None]
