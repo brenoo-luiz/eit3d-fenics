@@ -13,7 +13,8 @@ from matplotlib import font_manager
 from matplotlib.cm import ScalarMappable
 from matplotlib.colors import Normalize
 from matplotlib.lines import Line2D
-from matplotlib.ticker import FuncFormatter, LogLocator, NullLocator
+from matplotlib.ticker import FuncFormatter, LogLocator, MaxNLocator, NullLocator
+from matplotlib.transforms import blended_transform_factory
 
 from eit3d.config import OUTPUTS_DIR, EITConfig
 from eit3d.visualization.base import BaseRenderer
@@ -233,12 +234,13 @@ class StaticRenderer(BaseRenderer):
 
             ax1.semilogy(ns, y_vals, color=BLUE, linewidth=1.6, marker="o", markersize=2.5, zorder=3)
             ax1.plot(idx_min, y_vals[idx_min], "o", markersize=8, markerfacecolor="white",
-                        markeredgecolor=INK, markeredgewidth=1.2, zorder=4)
+                    markeredgecolor=INK, markeredgewidth=1.2, zorder=4)
             ax1.annotate(f"mínimo  {y_vals[idx_min]:.1e}", (idx_min, y_vals[idx_min]), xytext=(-10, -10),
                         textcoords="offset points", ha="right", va="top", fontsize=9, color=INK)
             self._panel(ax1, "Erro por perturbação", "yₙ")
             ax1.set_xlabel("n")
             ax1.set_xlim(0, ns[-1])
+            ax1.xaxis.set_major_locator(MaxNLocator(integer=True))
             ax1.set_ylim(y_vals.min() * 0.08, y_vals.max() * 3)
             ax1.yaxis.set_minor_locator(NullLocator())
 
@@ -249,9 +251,9 @@ class StaticRenderer(BaseRenderer):
             ax2.invert_xaxis()
             mid = n_fit // 2
             ax2.annotate(f"inclinação {slope:.3f}", (t_vals[mid], 10 ** fit_line[mid]), xytext=(10, 10),
-                        textcoords="offset points", ha="left", va="bottom", fontsize=9.5, color=INK, fontweight="bold")
+                            textcoords="offset points", ha="left", va="bottom", fontsize=9.5, color=INK, fontweight="bold")
             ax2.annotate("teoria: inclinação 1", (t_vals[-1], theory[-1]), xytext=(-4, -8), textcoords="offset points",
-                        ha="right", va="top", fontsize=8.5, color=INK_SOFT)
+                            ha="right", va="top", fontsize=8.5, color=INK_SOFT)
             ax2.set_ylim(min(y_vals.min(), theory.min()) * 0.08, y_vals.max() * 3)
             ax2.xaxis.set_minor_locator(NullLocator())
             ax2.yaxis.set_minor_locator(NullLocator())
@@ -292,6 +294,7 @@ class StaticRenderer(BaseRenderer):
 
             for ax in (ax1, ax2):
                 ax.set_xlim(0, max(ks[-1], 1))
+                ax.xaxis.set_major_locator(MaxNLocator(integer=True))
                 ax.set_xlabel("iteração k")
             return self._save(fig, filename)
 
@@ -313,13 +316,19 @@ class StaticRenderer(BaseRenderer):
                 main = step == highlight
                 ax.semilogy(np.arange(len(res)), res, color=BLUE if main else GREY,
                             linewidth=2.4 if main else 1.6, zorder=3 if main else 2)
-                self._end_label(ax, len(res) - 1, res[-1], f"λ = {step:g}", BLUE if main else INK_SOFT, bold=main)
                 values.append(res)
             if floor is not None:
                 self._floor(ax, k_max, floor)
                 values.append([floor])
             self._log_axis(ax, np.concatenate(values))
             ax.set_xlim(0, k_max)
+            ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+            labels = [(step, residuals[step][-1]) for step in sorted(residuals)]
+            for (step, _), height in zip(labels, self._spread_labels(ax, [y for _, y in labels])):
+                main = step == highlight
+                ax.text(k_max, height, f"  λ = {step:g}", transform=blended_transform_factory(ax.transData, ax.transAxes),
+                        ha="left", va="center", fontsize=9.5, color=BLUE if main else INK_SOFT,
+                        fontweight="bold" if main else "normal")
             ax.set_xlabel("iteração k")
             ax.set_ylabel("‖F(γₖ) − ũ‖")
             return self._save(fig, filename)
@@ -390,6 +399,17 @@ class StaticRenderer(BaseRenderer):
     def _end_label(ax, x: float, y: float, text: str, color: str, bold: bool = False) -> None:
         ax.annotate(text, (x, y), xytext=(6, 0), textcoords="offset points", va="center", ha="left",
                     fontsize=9.5, color=color, fontweight="bold" if bold else "normal", annotation_clip=False)
+
+    @staticmethod
+    def _spread_labels(ax, values: Sequence[float], gap: float = 0.05) -> List[float]:
+        """Vertical positions (axes fraction) of end labels on a log axis, at least `gap` apart."""
+        low, high = (np.log10(v) for v in ax.get_ylim())
+        heights = [(np.log10(v) - low) / (high - low) for v in values]
+        order = np.argsort(heights)
+        placed = list(heights)
+        for prev, cur in zip(order[:-1], order[1:]):
+            placed[cur] = max(placed[cur], placed[prev] + gap)
+        return placed
 
     @staticmethod
     def _floor(ax, x_end: float, floor: float, above: bool = False) -> None:
