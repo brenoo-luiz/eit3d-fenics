@@ -248,3 +248,13 @@ def test_benchmark_conductivity_and_initial_guess(mesh_data):
     assert np.all(bench.initial_guess(mesh).x.array == 1.0)
     assert len(bench.currents(mesh)) == 8
     assert bench.spheres == [(c, 0.25) for c in CENTERS]
+
+
+def test_linearization_norm_bounds_the_operator(problem, linearized):
+    op, _ = linearized
+    mesh = problem["mesh"]
+    norm_sq = op.norm_squared(iterations=6)
+    sigma = DirectionalField(mesh, EtaConfig()).build()
+    applied = op.apply(sigma)
+    ratio = boundary_inner(applied, applied, mesh) / integrate(sigma * sigma * ufl.dx)
+    assert 0 < ratio <= norm_sq * (1 + 1e-6)

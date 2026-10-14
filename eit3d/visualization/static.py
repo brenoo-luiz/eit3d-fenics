@@ -233,7 +233,7 @@ class StaticRenderer(BaseRenderer):
 
             ax1.semilogy(ns, y_vals, color=BLUE, linewidth=1.6, marker="o", markersize=2.5, zorder=3)
             ax1.plot(idx_min, y_vals[idx_min], "o", markersize=8, markerfacecolor="white",
-                    markeredgecolor=INK, markeredgewidth=1.2, zorder=4)
+                        markeredgecolor=INK, markeredgewidth=1.2, zorder=4)
             ax1.annotate(f"mínimo  {y_vals[idx_min]:.1e}", (idx_min, y_vals[idx_min]), xytext=(-10, -10),
                         textcoords="offset points", ha="right", va="top", fontsize=9, color=INK)
             self._panel(ax1, "Erro por perturbação", "yₙ")
@@ -291,7 +291,7 @@ class StaticRenderer(BaseRenderer):
             self._panel(ax2, "Erro relativo", "‖γ⁺ − γₖ‖ / ‖γ⁺‖")
 
             for ax in (ax1, ax2):
-                ax.set_xlim(0, ks[-1])
+                ax.set_xlim(0, max(ks[-1], 1))
                 ax.set_xlabel("iteração k")
             return self._save(fig, filename)
 

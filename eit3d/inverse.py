@@ -127,6 +127,11 @@ class InverseProblem:
         ).solve()
         return project_dg0(adj, gamma.function_space)
 
+    def linearization_norm_squared(self, gamma: dolfinx.fem.Function, iterations: int = 8) -> float:
+        """||F'_G(gamma)||^2. The gradient iterations are stable for 0 < lambda < 2 / ||F'_G(gamma)||^2."""
+        with LinearizedOperator(self._mesh, self._V, gamma, self.forward(gamma), self._config, self._comm) as op:
+            return op.norm_squared(iterations)
+
     def error(self, gamma: dolfinx.fem.Function) -> Optional[float]:
         if self._gamma_true is None:
             return None
@@ -335,6 +340,19 @@ class LinearizedOperator:
         out.x.scatter_forward()
         return out
 
+    def norm_squared(self, iterations: int = 8, seed: int = 0) -> float:
+        """Estimate of ||F'(gamma)||^2 by power iteration on F'(gamma)* F'(gamma)."""
+        v = dolfinx.fem.Function(self._V0)
+        v.x.array[:] = np.random.default_rng(seed).random(v.x.array.size)
+        estimate = 0.0
+        for _ in range(iterations):
+            v.x.array[:] /= self._l2_norm(v)
+            v.x.scatter_forward()
+            w = self.adjoint([omega.x.array for omega in self.apply(v)])
+            estimate = self._sum(dolfinx.fem.form(v * w * ufl.dx))
+            v = w
+        return float(estimate)
+
     def norm(self, functions: Sequence[np.ndarray]) -> float:
         total = 0.0
         for values in functions:
@@ -357,6 +375,9 @@ class LinearizedOperator:
         u.x.array[:] -= self._boundary_integral(u) / self._area
         u.x.scatter_forward()
         return u
+
+    def _l2_norm(self, f: dolfinx.fem.Function) -> float:
+        return float(np.sqrt(self._sum(dolfinx.fem.form(f * f * ufl.dx))))
 
     def _boundary_integral(self, f: dolfinx.fem.Function) -> float:
         self._probe.x.array[:] = f.x.array
