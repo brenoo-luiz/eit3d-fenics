@@ -18,12 +18,12 @@ Coefficient = Union[dolfinx.fem.Function, dolfinx.fem.Constant]
 
 _OPTIONS_PREFIX = "eit3d_"
 _HYPRE_3D_OPTIONS = {
-    "pc_hypre_type"                      : "boomeramg",
+    "pc_hypre_type": "boomeramg",
     "pc_hypre_boomeramg_strong_threshold": 0.5,
-    "pc_hypre_boomeramg_coarsen_type"    : "HMIS",
-    "pc_hypre_boomeramg_interp_type"     : "ext+i",
-    "pc_hypre_boomeramg_P_max"           : 4,
-    "pc_hypre_boomeramg_agg_nl"          : 1,
+    "pc_hypre_boomeramg_coarsen_type": "HMIS",
+    "pc_hypre_boomeramg_interp_type": "ext+i",
+    "pc_hypre_boomeramg_P_max": 4,
+    "pc_hypre_boomeramg_agg_nl": 1,
 }
 
 
@@ -31,11 +31,11 @@ class BaseSolver(ABC):
 
     def __init__(
         self,
-        mesh  : dolfinx.mesh.Mesh,
-        V     : dolfinx.fem.FunctionSpace,
-        gamma : Coefficient,
+        mesh: dolfinx.mesh.Mesh,
+        V: dolfinx.fem.FunctionSpace,
+        gamma: Coefficient,
         config: SolverConfig,
-        comm  : MPI.Comm = MPI.COMM_WORLD,
+        comm: MPI.Comm = MPI.COMM_WORLD,
     ) -> None:
         self._mesh = mesh
         self._V = V
@@ -99,69 +99,11 @@ class BaseSolver(ABC):
 
     def _assemble_and_solve_many(
         self,
-        a_form : dolfinx.fem.Form,
+        a_form: dolfinx.fem.Form,
         L_forms: List[dolfinx.fem.Form],
     ) -> List[dolfinx.fem.Function]:
-        A = b = ns_vec = ns = ksp = None
-        try:
-            A = dolfinx.fem.petsc.assemble_matrix(a_form)
-            A.assemble()
-
-            ns_vec = A.createVecLeft()
-            ns_vec.set(1.0)
-            ns_vec.normalize()
-            ns = PETSc.NullSpace().create(vectors=[ns_vec], comm=self._comm)
-            A.setNullSpace(ns)
-            A.setTransposeNullSpace(ns)
-
-            ksp = PETSc.KSP().create(self._comm)
-            ksp.setOperators(A)
-            ksp.setType(PETSc.KSP.Type.CG)
-            ksp.getPC().setType(PETSc.PC.Type.HYPRE)
-            ksp.setTolerances(
-                rtol=self._config.rtol,
-                atol=self._config.atol,
-                max_it=self._config.max_it,
-            )
-            self._set_amg_options(ksp)
-
-            b = A.createVecRight()
-            solutions = []
-            for L_form in L_forms:
-                with b.localForm() as loc_b:
-                    loc_b.set(0.0)
-                dolfinx.fem.petsc.assemble_vector(b, L_form)
-                b.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
-                ns.remove(b)
-
-                u_h = dolfinx.fem.Function(self._V)
-                ksp.solve(b, u_h.x.petsc_vec)
-                u_h.x.scatter_forward()
-
-                reason = ksp.getConvergedReason()
-                if reason < 0:
-                    raise RuntimeError(
-                        f"{type(self).__name__}: KSP diverged (reason={reason})"
-                    )
-                logger.info(
-                    "%s: converged in %d iterations",
-                    type(self).__name__, ksp.getIterationNumber(),
-                )
-                solutions.append(u_h)
-            return solutions
-        finally:
-            for obj in (ksp, ns, b, ns_vec, A):
-                if obj is not None:
-                    obj.destroy()
-
-    @staticmethod
-    def _set_amg_options(ksp: PETSc.KSP) -> None:
-        opts = PETSc.Options()
-        for key, value in _HYPRE_3D_OPTIONS.items():
-            if not opts.hasName(_OPTIONS_PREFIX + key):
-                opts[_OPTIONS_PREFIX + key] = value
-        ksp.setOptionsPrefix(_OPTIONS_PREFIX)
-        ksp.setFromOptions()
+        with NeumannSystem(a_form, self._V, self._config, self._comm, owner=type(self).__name__) as system:
+            return [system.solve(L_form) for L_form in L_forms]
 
     def _normalize_boundary_mean(self, u_h: dolfinx.fem.Function) -> None:
         integral = self._comm.allreduce(
@@ -176,3 +118,77 @@ class BaseSolver(ABC):
         )
         u_h.x.array[:] -= integral / area
         u_h.x.scatter_forward()
+
+
+class NeumannSystem:
+    """
+    Stiffness matrix of -div(gamma grad u) with its constant null space and a
+    CG + BoomerAMG solver, assembled once and reused for many right-hand sides.
+    """
+
+    def __init__(
+        self,
+        a_form: dolfinx.fem.Form,
+        V: dolfinx.fem.FunctionSpace,
+        config: SolverConfig,
+        comm: MPI.Comm = MPI.COMM_WORLD,
+        owner: str = "NeumannSystem",
+    ) -> None:
+        self._V = V
+        self._comm = comm
+        self._owner = owner
+        self._A = dolfinx.fem.petsc.assemble_matrix(a_form)
+        self._A.assemble()
+
+        self._ns_vec = self._A.createVecLeft()
+        self._ns_vec.set(1.0)
+        self._ns_vec.normalize()
+        self._ns = PETSc.NullSpace().create(vectors=[self._ns_vec], comm=comm)
+        self._A.setNullSpace(self._ns)
+        self._A.setTransposeNullSpace(self._ns)
+
+        self._ksp = PETSc.KSP().create(comm)
+        self._ksp.setOperators(self._A)
+        self._ksp.setType(PETSc.KSP.Type.CG)
+        self._ksp.getPC().setType(PETSc.PC.Type.HYPRE)
+        self._ksp.setTolerances(rtol=config.rtol, atol=config.atol, max_it=config.max_it)
+        self._set_amg_options(self._ksp)
+
+        self._b = self._A.createVecRight()
+
+    def solve(self, L_form: dolfinx.fem.Form) -> dolfinx.fem.Function:
+        """Solution of A u = b(L_form), with b projected onto the range of A."""
+        with self._b.localForm() as loc_b:
+            loc_b.set(0.0)
+        dolfinx.fem.petsc.assemble_vector(self._b, L_form)
+        self._b.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
+        self._ns.remove(self._b)
+
+        u_h = dolfinx.fem.Function(self._V)
+        self._ksp.solve(self._b, u_h.x.petsc_vec)
+        u_h.x.scatter_forward()
+
+        reason = self._ksp.getConvergedReason()
+        if reason < 0:
+            raise RuntimeError(f"{self._owner}: KSP diverged (reason={reason})")
+        logger.info("%s: converged in %d iterations", self._owner, self._ksp.getIterationNumber())
+        return u_h
+
+    def close(self) -> None:
+        for obj in (self._ksp, self._ns, self._b, self._ns_vec, self._A):
+            obj.destroy()
+
+    def __enter__(self) -> "NeumannSystem":
+        return self
+
+    def __exit__(self, *exc) -> None:
+        self.close()
+
+    @staticmethod
+    def _set_amg_options(ksp: PETSc.KSP) -> None:
+        opts = PETSc.Options()
+        for key, value in _HYPRE_3D_OPTIONS.items():
+            if not opts.hasName(_OPTIONS_PREFIX + key):
+                opts[_OPTIONS_PREFIX + key] = value
+        ksp.setOptionsPrefix(_OPTIONS_PREFIX)
+        ksp.setFromOptions()

@@ -13,8 +13,11 @@ from mpi4py import MPI
 from eit3d.config import EtaConfig, MeshConfig, SolverConfig
 from eit3d.currents import cosine_currents, lateral_measure
 from eit3d.fields import DirectionalField, SpheresField
-from eit3d.inverse import GradientMethod, data_from, project_dg0, transfer
+from eit3d.inverse import (
+    GradientMethod, InexactNewton, LinearizedOperator, data_from, project_dg0, transfer,
+)
 from eit3d.mesh.cylinder import CylinderMesh
+from eit3d.solvers import MultiDerivativeSolver
 
 COMM = MPI.COMM_WORLD
 SOLVER = SolverConfig()
@@ -48,8 +51,9 @@ def problem(mesh_data, fine):
     data = [transfer(d, V) for d in data_f]
     truth = SpheresField(mesh, CENTERS, 0.25, 10.0, 1.0).build()
     method = GradientMethod(mesh, V, cosine_currents(mesh, KS), lateral_measure(mesh, tags), data, SOLVER, truth, COMM)
+    newton = InexactNewton(mesh, V, cosine_currents(mesh, KS), lateral_measure(mesh, tags), data, SOLVER, truth, COMM)
     gamma0 = SpheresField(mesh, (), 0.25, 1.0, 1.0).build()
-    return dict(mesh=mesh, tags=tags, V=V, method=method, gamma0=gamma0, truth=truth)
+    return dict(mesh=mesh, tags=tags, V=V, method=method, newton=newton, gamma0=gamma0, truth=truth)
 
 
 def test_spheres_field_values(mesh_data):
@@ -159,3 +163,88 @@ def test_inverse_figures(problem, tmp_path):
     ]
     for out in outputs:
         assert out.exists() and out.stat().st_size > 0
+
+
+# Inexact Newton
+@pytest.fixture(scope="module")
+def linearized(problem):
+    mesh, V, gamma0 = problem["mesh"], problem["V"], problem["gamma0"]
+    u0 = problem["method"].forward(gamma0)
+    op = LinearizedOperator(mesh, V, gamma0, u0, SOLVER, COMM)
+    yield op, u0
+    op.close()
+
+
+def boundary_inner(fs, gs, mesh) -> float:
+    ds = ufl.Measure("ds", domain=mesh)
+    return sum(integrate(f * g * ds) for f, g in zip(fs, gs))
+
+
+def test_linearized_apply_matches_derivative_solver(problem, linearized):
+    op, u0 = linearized
+    mesh, V, gamma0 = problem["mesh"], problem["V"], problem["gamma0"]
+    sigma = DirectionalField(mesh, EtaConfig()).build()
+    expected = MultiDerivativeSolver(mesh, V, gamma0, sigma, u0, SOLVER, COMM).solve_all()
+    for w, w_ref in zip(op.apply(sigma), expected):
+        assert np.abs(w.x.array - w_ref.x.array).max() < 1e-8
+
+
+def test_linearized_adjoint_relation(problem, linearized):
+    op, u0 = linearized
+    mesh, V = problem["mesh"], problem["V"]
+    sigma = DirectionalField(mesh, EtaConfig()).build()
+    hs = []
+    for j in range(len(u0)):
+        h = dolfinx.fem.Function(V)
+        h.interpolate(lambda x, j=j: np.cos((j + 1) * x[0]) + x[2] ** 2)
+        hs.append(h)
+    lhs = integrate(op.adjoint([h.x.array for h in hs]) * sigma * ufl.dx)
+    centered = []
+    for h in hs:
+        c = h.copy()
+        c.x.array[:] -= integrate(h * ufl.ds(domain=mesh)) / integrate(1.0 * ufl.ds(domain=mesh))
+        centered.append(c)
+    rhs = boundary_inner(centered, op.apply(sigma), mesh)
+    assert abs(lhs - rhs) / abs(rhs) < 1e-8
+
+
+def test_newton_decreases_residual_and_records_inner_iterations(problem):
+    result = problem["newton"].run(problem["gamma0"], 1.0, 2, mu=0.9, n_inner=20, snapshot_every=1)
+    assert [r.k for r in result.history] == [0, 1, 2]
+    assert result.failure is None
+    assert result.residuals[1] < result.residuals[0]
+    assert result.residuals[2] < result.residuals[1]
+    assert len(result.inner_iterations) == 2
+    assert np.all((result.inner_iterations >= 1) & (result.inner_iterations <= 20))
+    assert sorted(result.snapshots) == [1, 2]
+    assert np.all(problem["gamma0"].x.array == 1.0)
+
+
+def test_newton_inner_loop_respects_limit(problem):
+    result = problem["newton"].run(problem["gamma0"], 1e-6, 1, mu=0.9, n_inner=3)
+    assert list(result.inner_iterations) == [3]
+
+
+def test_newton_invalid_arguments(problem):
+    newton, gamma0 = problem["newton"], problem["gamma0"]
+    for kwargs in (dict(step=-1.0), dict(step=1.0, mu=1.0), dict(step=1.0, mu=0.0), dict(step=1.0, n_inner=0)):
+        with pytest.raises(ValueError):
+            newton.run(gamma0, n_outer=1, **kwargs)
+
+
+def test_newton_with_one_inner_iteration_is_a_gradient_step(problem):
+    newton = problem["newton"].run(problem["gamma0"], 0.5, 1, mu=0.5, n_inner=1)
+    gradient = problem["method"].run(problem["gamma0"], 0.5, 1)
+    assert list(newton.inner_iterations) == [1]
+    assert np.isclose(newton.residuals[1], gradient.residuals[1], rtol=1e-8)
+
+
+def test_benchmark_conductivity_and_initial_guess(mesh_data):
+    from eit3d.benchmark import TwoSpheres
+
+    mesh, _, _ = mesh_data
+    bench = TwoSpheres()
+    assert set(np.unique(bench.conductivity(mesh).x.array).tolist()) == {1.0, 10.0}
+    assert np.all(bench.initial_guess(mesh).x.array == 1.0)
+    assert len(bench.currents(mesh)) == 8
+    assert bench.spheres == [(c, 0.25) for c in CENTERS]

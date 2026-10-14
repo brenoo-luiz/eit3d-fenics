@@ -233,9 +233,9 @@ class StaticRenderer(BaseRenderer):
 
             ax1.semilogy(ns, y_vals, color=BLUE, linewidth=1.6, marker="o", markersize=2.5, zorder=3)
             ax1.plot(idx_min, y_vals[idx_min], "o", markersize=8, markerfacecolor="white",
-                        markeredgecolor=INK, markeredgewidth=1.2, zorder=4)
+                    markeredgecolor=INK, markeredgewidth=1.2, zorder=4)
             ax1.annotate(f"mínimo  {y_vals[idx_min]:.1e}", (idx_min, y_vals[idx_min]), xytext=(-10, -10),
-                            textcoords="offset points", ha="right", va="top", fontsize=9, color=INK)
+                        textcoords="offset points", ha="right", va="top", fontsize=9, color=INK)
             self._panel(ax1, "Erro por perturbação", "yₙ")
             ax1.set_xlabel("n")
             ax1.set_xlim(0, ns[-1])
@@ -249,9 +249,9 @@ class StaticRenderer(BaseRenderer):
             ax2.invert_xaxis()
             mid = n_fit // 2
             ax2.annotate(f"inclinação {slope:.3f}", (t_vals[mid], 10 ** fit_line[mid]), xytext=(10, 10),
-                            textcoords="offset points", ha="left", va="bottom", fontsize=9.5, color=INK, fontweight="bold")
+                        textcoords="offset points", ha="left", va="bottom", fontsize=9.5, color=INK, fontweight="bold")
             ax2.annotate("teoria: inclinação 1", (t_vals[-1], theory[-1]), xytext=(-4, -8), textcoords="offset points",
-                            ha="right", va="top", fontsize=8.5, color=INK_SOFT)
+                        ha="right", va="top", fontsize=8.5, color=INK_SOFT)
             ax2.set_ylim(min(y_vals.min(), theory.min()) * 0.08, y_vals.max() * 3)
             ax2.xaxis.set_minor_locator(NullLocator())
             ax2.yaxis.set_minor_locator(NullLocator())
@@ -266,6 +266,7 @@ class StaticRenderer(BaseRenderer):
         step: float,
         filename: str,
         floor: Optional[float] = None,
+        title: Optional[str] = None,
     ) -> Path:
         res = np.asarray(residuals)
         err = np.asarray(errors)
@@ -273,7 +274,7 @@ class StaticRenderer(BaseRenderer):
         with plt.rc_context(STYLE):
             fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11, 4.6))
             fig.subplots_adjust(left=0.08, right=0.92, top=0.78, bottom=0.14, wspace=0.3)
-            self._header(fig, f"Método do gradiente  ·  λ = {step:g}")
+            self._header(fig, title if title is not None else f"Método do gradiente  ·  λ = {step:g}")
 
             ax1.semilogy(ks, res, color=BLUE, linewidth=2, zorder=3)
             self._end_label(ax1, ks[-1], res[-1], f"{res[-1]:.3g}", BLUE, bold=True)
