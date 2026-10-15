@@ -38,7 +38,6 @@ class AdjointSolver(BaseSolver):
         return self._psi
 
     def solve(self) -> dolfinx.fem.Function:
-        """Solve for psi and return F'(gamma)* h = -grad(u_gamma).grad(psi) in DG2."""
         self._psi = super().solve()
 
         W = dolfinx.fem.functionspace(self._mesh, ("DG", 2))
@@ -60,7 +59,6 @@ class AdjointSolver(BaseSolver):
         return self._h * v * self._ds_all
 
     def _center_on_boundary(self, h: ufl.core.expr.Expr) -> ufl.core.expr.Expr:
-        """Return h - mean_dOmega(h), so that int_dOmega h ds = 0."""
         one = dolfinx.fem.Constant(self._mesh, dolfinx.default_scalar_type(1.0))
         integral = self._comm.allreduce(
             dolfinx.fem.assemble_scalar(dolfinx.fem.form(h * self._ds_all)), op=MPI.SUM,

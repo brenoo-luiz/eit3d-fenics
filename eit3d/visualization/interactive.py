@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-
 import pyvista
 
 from eit3d.visualization.base import BaseRenderer
@@ -12,7 +11,6 @@ logger = logging.getLogger(__name__)
 class InteractiveRenderer(BaseRenderer):
 
     def show(self, grid: pyvista.UnstructuredGrid, scalar: str) -> None:
-        """Open the window (blocks until it is closed)."""
         gam = self._config.conductivity
         plane = float(gam.center[0])
         clim = [float(grid[scalar].min()), float(grid[scalar].max())]

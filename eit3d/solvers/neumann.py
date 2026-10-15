@@ -13,12 +13,6 @@ logger = logging.getLogger(__name__)
 
 
 class NeumannSolver(BaseSolver):
-    """
-    Pure Neumann problem with an arbitrary boundary flux g (UFL expression).
-
-    The compatibility condition int_dOmega g ds = 0 is the caller's
-    responsibility; any residual mean is removed by the null space.
-    """
 
     def __init__(
         self,

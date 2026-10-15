@@ -45,7 +45,7 @@ def mesh(pipe) -> None:
     from eit3d.mesh.cylinder import mesh_cache_path
 
     if not mesh_cache_path(pipe.config.mesh).exists():
-        print("  Gerando a malha (só na primeira vez, cerca de 1,5 min)...")
+        print("  Gerando a malha (só na primeira vez)...")
     mesh_, _ = pipe.get_mesh()
     cells = mesh_.topology.index_map(3).size_global
     dofs  = pipe.get_function_space().dofmap.index_map.size_global

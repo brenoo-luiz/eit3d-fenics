@@ -18,15 +18,6 @@ logger = logging.getLogger(__name__)
 
 
 class EITPipeline:
-    """
-    Main orchestrator for the EIT 3D project.
-
-    Cache strategy:
-        Mesh      -> saved to disk, filename derived from config hash
-                    (changing any mesh parameter triggers regeneration)
-        Gamma/Eta -> always recomputed
-        Solution  -> always solved
-    """
 
     def __init__(
         self,
@@ -54,13 +45,11 @@ class EITPipeline:
         return self._config
 
     def get_mesh(self) -> Tuple[dolfinx.mesh.Mesh, dolfinx.mesh.MeshTags]:
-        """Return (mesh, facet_tags), loading or generating on first call."""
         if self._mesh is None:
             self._mesh, self._facet_tags = self._cylinder.get()
         return self._mesh, self._facet_tags
 
     def get_function_space(self) -> dolfinx.fem.FunctionSpace:
-        """Return the P2 Lagrange function space."""
         if self._V is None:
             mesh, _ = self.get_mesh()
             el = basix.ufl.element(
@@ -71,7 +60,6 @@ class EITPipeline:
         return self._V
 
     def build_gamma(self) -> dolfinx.fem.Function:
-        """Build and return the conductivity field gamma (DG0)."""
         mesh, _ = self.get_mesh()
         return ConductivityField(mesh, self._config.conductivity).build()
 
@@ -85,7 +73,6 @@ class EITPipeline:
         pattern: int = 0,
         gamma  : Optional[dolfinx.fem.Function] = None,
     ) -> dolfinx.fem.Function:
-        """Solve the EIT forward problem for a current pattern."""
         if gamma is None:
             gamma = self.build_gamma()
 
@@ -122,7 +109,6 @@ class EITPipeline:
         ).solve()
 
     def status(self) -> str:
-        """Return a summary of the configuration and mesh cache state."""
         state = "available" if self._cylinder.is_cached() else "not generated"
         return "\n".join([
             self._config.summary(),

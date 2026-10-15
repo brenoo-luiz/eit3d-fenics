@@ -66,7 +66,6 @@ def test_section_circle_misses_sphere():
 
 # Images
 def test_consistency_figure(tmp_path):
-    """Matplotlib only"""
     t = 0.9 ** np.arange(60)
     y = 0.27 * t
     fit = np.polyval(np.polyfit(np.log10(t[:40]), np.log10(y[:40]), 1), np.log10(t[:40]))
@@ -96,7 +95,6 @@ def test_static_figures(tmp_path, mesh_data):
     assert not list(tmp_path.glob("_tmp_*")), "temporary files left behind"
 
 def test_inversion_figures(tmp_path):
-    """Matplotlib only"""
     k = np.arange(201)
     res = 0.01 + 0.15 * np.exp(-k / 20)
     err = 0.7 + 0.05 * np.exp(-k / 30)

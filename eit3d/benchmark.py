@@ -20,7 +20,6 @@ Point = Tuple[float, float, float]
 
 @dataclass(frozen=True)
 class TwoSpheres:
-    """gamma+ = background in the cylinder and value inside two spheres."""
     centers: Tuple[Point, ...] = ((0.4, 0.0, 0.4), (-0.4, 0.0, -0.4))
     radius: float = 0.25
     value: float = 10.0
@@ -49,7 +48,6 @@ class TwoSpheres:
         return EITPipeline(EITConfig(mesh=self.coarse_mesh))
 
     def data(self, pipe: EITPipeline, comm: MPI.Comm = MPI.COMM_WORLD) -> List[dolfinx.fem.Function]:
-        """u~ = F_G(gamma+) on the mesh of `pipe`."""
         mesh, facet_tags = pipe.get_mesh()
         return data_from(
             mesh, pipe.get_function_space(), self.conductivity(mesh), self.currents(mesh),

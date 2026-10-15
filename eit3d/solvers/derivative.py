@@ -13,22 +13,6 @@ logger = logging.getLogger(__name__)
 
 
 class DerivativeSolver(BaseSolver):
-    """
-    Directional derivative F'(gamma)eta of the EIT forward operator.
-
-    Solves variational equation (1.13):
-
-        int_Omega gamma grad(w).grad(v) dx = -int_Omega eta grad(u_gamma).grad(v) dx
-
-    LHS: same bilinear operator as the forward problem (inherited).
-    RHS: volumetric integral over Omega; u_gamma is used in the whole
-        domain, not only on the boundary.
-
-    Result: F'(gamma)eta = omega|_{dOmega}, with int_dOmega omega ds = 0.
-
-    Note: eta is the derivative direction in L_inf(Omega),
-        NOT the outward normal vector.
-    """
 
     def __init__(
         self,

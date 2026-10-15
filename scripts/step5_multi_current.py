@@ -84,7 +84,7 @@ def main() -> None:
     base = cfg.consistency.base
     n_iter = cfg.consistency.n_iter
     report.section(f"Teste de consistência da derivada: {n_iter} perturbações γ + tσ, com t = {base:g}ⁿ")
-    print("  y = erro das 8 derivadas numéricas em relação a ω (norma do conjunto)")
+    print("  y = erro das 8 derivadas numéricas em relação a ω")
     print(f"  {'n':>5}  {'t':>9}  {'y':>9}")
 
     gamma_n = dolfinx.fem.Function(gamma.function_space)

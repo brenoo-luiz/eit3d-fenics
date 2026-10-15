@@ -13,24 +13,6 @@ logger = logging.getLogger(__name__)
 
 
 class ForwardSolver(BaseSolver):
-    """
-    EIT forward problem (Proposition 1.2).
-
-    Given gamma in L_inf_+(Omega) and current g in H_diamond^{-1/2}(dOmega),
-    finds u in H^1_diamond(Omega) such that:
-
-        int_Omega gamma grad(u).grad(v) dx = int_dOmega g v dS,  forall v
-
-    Neumann BC (current pattern given in the constructor):
-        g = g_top  on top face
-        g = g_bot  on bottom face
-        g = 0      on lateral surface
-
-    Existence condition: int_dOmega g ds = 0, i.e. g_top = -g_bot
-    (top and bottom faces have the same area). Validated in CurrentConfig.
-
-    Existence and uniqueness guaranteed by the Lax-Milgram theorem.
-    """
 
     def __init__(
         self,

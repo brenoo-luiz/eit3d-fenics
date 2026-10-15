@@ -83,7 +83,6 @@ class InversionResult:
 
 
 class InverseProblem:
-    """F_G, residual, error and gradient shared by the iterative methods."""
 
     def __init__(
         self,
@@ -128,7 +127,6 @@ class InverseProblem:
         return project_dg0(adj, gamma.function_space)
 
     def linearization_norm_squared(self, gamma: dolfinx.fem.Function, iterations: int = 8) -> float:
-        """||F'_G(gamma)||^2. The gradient iterations are stable for 0 < lambda < 2 / ||F'_G(gamma)||^2."""
         with LinearizedOperator(self._mesh, self._V, gamma, self.forward(gamma), self._config, self._comm) as op:
             return op.norm_squared(iterations)
 
@@ -150,7 +148,6 @@ class InverseProblem:
 
 
 class GradientMethod(InverseProblem):
-    """gamma_{k+1} = gamma_k - lambda F'_G(gamma_k)* (F_G(gamma_k) - u~)."""
 
     def run(
         self,
@@ -190,13 +187,6 @@ class GradientMethod(InverseProblem):
 
 
 class InexactNewton(InverseProblem):
-    """
-    Inexact Newton method with inner gradient (Landweber) iterations.
-
-    Outer step k: b = u~ - F_G(gamma_k). The Newton step s solves F'_G(gamma_k) s ~ b
-    approximately: starting from s = 0, s <- s - lambda F'_G(gamma_k)* (F'_G(gamma_k) s - b)
-    until ||F'_G(gamma_k) s - b|| <= mu ||b|| or n_inner iterations. Then gamma_{k+1} = gamma_k + s.
-    """
 
     def run(
         self,
@@ -260,13 +250,6 @@ class InexactNewton(InverseProblem):
 
 
 class LinearizedOperator:
-    """
-    F'_G(gamma) and its adjoint for a fixed gamma, with the stiffness matrix,
-    the AMG preconditioner and all forms built once and reused for every call.
-
-    apply(s)    -> (omega_1, ..., omega_m),  -div(gamma grad omega_j) = div(s grad u_j)
-    adjoint(h)  -> P_DG0( -sum_j grad u_j . grad psi_j ),  psi_j with flux h_j
-    """
 
     def __init__(
         self,
@@ -341,7 +324,6 @@ class LinearizedOperator:
         return out
 
     def norm_squared(self, iterations: int = 8, seed: int = 0) -> float:
-        """Estimate of ||F'(gamma)||^2 by power iteration on F'(gamma)* F'(gamma)."""
         v = dolfinx.fem.Function(self._V0)
         v.x.array[:] = np.random.default_rng(seed).random(v.x.array.size)
         estimate = 0.0

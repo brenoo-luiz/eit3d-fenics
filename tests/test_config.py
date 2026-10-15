@@ -128,7 +128,6 @@ class TestEITConfig:
 
 
 class TestImmutability:
-    """Configs are frozen: invariants cannot be broken after construction."""
 
     def test_cannot_reassign_field(self):
         cfg = MeshConfig()
@@ -169,7 +168,6 @@ class TestImmutability:
 
 
 class TestMeshCachePath:
-    """Needs dolfinx/gmsh; skipped automatically outside the FEniCS env."""
 
     @pytest.fixture(autouse=True)
     def _require_fenics(self):

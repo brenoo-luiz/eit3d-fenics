@@ -3,11 +3,6 @@ import pytest
 
 @pytest.fixture(scope="session")
 def mesh_data(tmp_path_factory):
-    """
-    Coarse cylinder mesh with its P2 space, built once per test session and
-    cached in a temporary directory (the project cache/ is never touched).
-    Requires FEniCS: tests using it are skipped when dolfinx/gmsh are missing.
-    """
     pytest.importorskip("dolfinx")
     pytest.importorskip("gmsh")
 

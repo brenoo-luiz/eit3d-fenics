@@ -5,7 +5,6 @@ from eit3d.config import ConductivityConfig, EtaConfig
 
 
 def test_sphere_indicator():
-    """Vectorized point-in-sphere test (the module itself imports dolfinx)."""
     pytest.importorskip("dolfinx")
     from eit3d.fields import sphere_indicator
 
@@ -37,7 +36,6 @@ def test_conductivity_values(mesh_data):
 
 
 def test_conductivity_inclusion_volume(mesh_data):
-    """Marked volume approximates the sphere volume (coarse mesh: 20 %)."""
     from eit3d.fields import ConductivityField
 
     mesh, _, _ = mesh_data
@@ -49,7 +47,6 @@ def test_conductivity_inclusion_volume(mesh_data):
 
 
 def test_eta_marks_every_sphere(mesh_data):
-    """Each eta sphere gets roughly the same marked volume."""
     from eit3d.fields import DirectionalField
 
     mesh, _, _ = mesh_data

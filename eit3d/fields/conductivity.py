@@ -15,18 +15,10 @@ logger = logging.getLogger(__name__)
 
 
 def sphere_indicator(points: np.ndarray, center: np.ndarray, radius: float) -> np.ndarray:
-    """Boolean mask of the points strictly inside the sphere (vectorized, O(N))."""
     return np.sum((points - center) ** 2, axis=1) < radius ** 2
 
 
 class PiecewiseSphereField(ABC):
-    """
-    DG0 field (one value per cell) equal to `value_in` in the cells whose
-    midpoint lies inside any of the spheres, and `value_out` elsewhere.
-
-    Template Method: build() is the fixed algorithm; subclasses only say
-    which spheres and values to use.
-    """
 
     def __init__(self, mesh: dolfinx.mesh.Mesh) -> None:
         self._mesh = mesh
@@ -87,7 +79,6 @@ class PiecewiseSphereField(ABC):
         return self._space
 
     def _local_cells_and_midpoints(self):
-        """Cells owned by this process (ghosts are filled by scatter_forward)."""
         tdim = self._mesh.topology.dim
         n_loc = self._mesh.topology.index_map(tdim).size_local
         cells = np.arange(n_loc, dtype=np.int32)
@@ -95,12 +86,6 @@ class PiecewiseSphereField(ABC):
 
 
 class ConductivityField(PiecewiseSphereField):
-    """
-    Conductivity gamma: gamma_in inside the inclusion sphere, gamma_out outside.
-
-    Lax-Milgram conditions guaranteed by the config:
-        0 < gamma_min <= gamma(x) <= gamma_max  a.e. in Omega
-    """
 
     def __init__(self, mesh: dolfinx.mesh.Mesh, config: ConductivityConfig) -> None:
         super().__init__(mesh)
@@ -128,12 +113,6 @@ class ConductivityField(PiecewiseSphereField):
 
 
 class DirectionalField(PiecewiseSphereField):
-    """
-    Derivative direction eta for F'(gamma)eta: eta_in inside each sphere,
-    eta_out outside all of them.
-
-    Note: eta here is the derivative direction, NOT the outward normal.
-    """
 
     def __init__(self, mesh: dolfinx.mesh.Mesh, config: EtaConfig) -> None:
         super().__init__(mesh)

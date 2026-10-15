@@ -22,7 +22,6 @@ class BaseRenderer:
 
 
     def _cylinder(self) -> pyvista.PolyData:
-        """Cylinder surface matching the mesh domain (centered at the origin)."""
         return pyvista.Cylinder(
             center=(0.0, 0.0, 0.0), direction=(0.0, 0.0, 1.0),
             radius=self._config.mesh.radius, height=self._config.mesh.height,
@@ -40,10 +39,6 @@ class BaseRenderer:
     def _section_circle(
         center: Sequence[float], radius: float, axis: int, plane: float,
     ) -> pyvista.PolyData:
-        """
-        Intersection of a sphere with the plane {x_axis = plane}, as a closed
-        curve. Returns an empty PolyData if the plane misses the sphere.
-        """
         dist = plane - float(center[axis])
         if abs(dist) >= radius:
             return pyvista.PolyData()
@@ -57,7 +52,6 @@ class BaseRenderer:
         return pyvista.Spline(pts, 200)
 
     def _camera_distance(self) -> float:
-        """Distance that frames the whole cylinder in axis-aligned views."""
         return 2.5 * max(self._config.mesh.radius, self._config.mesh.height)
 
     @staticmethod
@@ -71,7 +65,6 @@ class BaseRenderer:
 
     @staticmethod
     def _fmt(value: float) -> str:
-        """Compact number formatting for titles (0.35, 2, -0.3)."""
         return f"{float(value):g}"
 
     @classmethod

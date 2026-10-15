@@ -68,7 +68,6 @@ STYLE = {
 
 @dataclass(frozen=True)
 class SurfacePanel:
-    """One panel of a multi-panel figure: a scalar field on the domain surface."""
     grid: pyvista.UnstructuredGrid
     scalar: str
     title: str
@@ -402,7 +401,6 @@ class StaticRenderer(BaseRenderer):
 
     @staticmethod
     def _spread_labels(ax, values: Sequence[float], gap: float = 0.05) -> List[float]:
-        """Vertical positions (axes fraction) of end labels on a log axis, at least `gap` apart."""
         low, high = (np.log10(v) for v in ax.get_ylim())
         heights = [(np.log10(v) - low) / (high - low) for v in values]
         order = np.argsort(heights)
@@ -540,7 +538,6 @@ class StaticRenderer(BaseRenderer):
 
     @staticmethod
     def _pad_to_ratio(img: np.ndarray, ratio: float) -> np.ndarray:
-        """Pads the bottom with background so every panel has the same height/width ratio."""
         missing = int(round(ratio * img.shape[1])) - img.shape[0]
         if missing <= 0:
             return img

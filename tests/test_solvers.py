@@ -57,7 +57,6 @@ def boundary_mean(u, mesh) -> float:
 
 # Tests
 def test_manufactured_solution(mesh_data):
-    """Pure Neumann problem with u = x^2 - y^2 is solved exactly by P2."""
     mesh, _, V = mesh_data
     x = ufl.SpatialCoordinate(mesh)
     n = ufl.FacetNormal(mesh)
@@ -86,18 +85,12 @@ def test_derivative_boundary_mean_zero(mesh_data, omega):
 
 
 def test_forward_is_odd_in_z(u_gamma):
-    """
-    gamma is symmetric and g_top = -g_bot, so the exact solution is odd in z
-    and max(u) = -min(u). The unstructured mesh is not symmetric, so the
-    discrete solution is only approximately odd (the gap shrinks with h).
-    """
     u_max = float(u_gamma.x.array.max())
     u_min = float(u_gamma.x.array.min())
     assert np.isclose(u_max, -u_min, rtol=5e-3)
 
 
 def test_derivative_first_order_consistency(mesh_data, fields, u_gamma, omega):
-    """y(t) = ||(F(gamma + t eta) - F(gamma)) / t - F'(gamma)eta|| / ||F'(gamma)eta|| = O(t)."""
     mesh, facet_tags, V = mesh_data
     gamma, eta = fields
     ds = ufl.Measure("ds", domain=mesh)
@@ -121,7 +114,6 @@ def test_derivative_first_order_consistency(mesh_data, fields, u_gamma, omega):
 
 
 def test_adjoint_relation(mesh_data, fields, u_gamma, omega):
-    """<F'(gamma)* h, sigma>_Omega = <h, F'(gamma) sigma>_dOmega, h without symmetry."""
     mesh, _, V = mesh_data
     gamma, sigma = fields
     x = ufl.SpatialCoordinate(mesh)
@@ -136,10 +128,6 @@ def test_adjoint_relation(mesh_data, fields, u_gamma, omega):
 
 
 def test_adjoint_relation_caps_lateral_h(mesh_data, fields, u_gamma, omega):
-    """
-    Advisor's h (2 on the caps, -1 on the lateral surface). <h, omega> is ~0 by
-    parity, so the error is measured relative to ||F'* h|| ||sigma||.
-    """
     mesh, _, V = mesh_data
     gamma, sigma = fields
     z = ufl.SpatialCoordinate(mesh)[2]

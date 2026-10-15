@@ -46,7 +46,6 @@ class BaseSolver(ABC):
 
     # Template Method
     def solve(self) -> dolfinx.fem.Function:
-        """Solve the variational problem and return the normalized solution."""
         return self.solve_all()[0]
 
     def solve_all(self) -> List[dolfinx.fem.Function]:
@@ -68,7 +67,6 @@ class BaseSolver(ABC):
 
     # Hooks
     def _bilinear_form(self, w: ufl.Argument, v: ufl.Argument) -> ufl.Form:
-        """a(w, v) = int_Omega gamma grad(w).grad(v) dx (shared by all solvers)."""
         return ufl.inner(self._gamma * ufl.grad(w), ufl.grad(v)) * ufl.dx
 
     @abstractmethod
@@ -121,10 +119,6 @@ class BaseSolver(ABC):
 
 
 class NeumannSystem:
-    """
-    Stiffness matrix of -div(gamma grad u) with its constant null space and a
-    CG + BoomerAMG solver, assembled once and reused for many right-hand sides.
-    """
 
     def __init__(
         self,
@@ -157,7 +151,6 @@ class NeumannSystem:
         self._b = self._A.createVecRight()
 
     def solve(self, L_form: dolfinx.fem.Form) -> dolfinx.fem.Function:
-        """Solution of A u = b(L_form), with b projected onto the range of A."""
         with self._b.localForm() as loc_b:
             loc_b.set(0.0)
         dolfinx.fem.petsc.assemble_vector(self._b, L_form)

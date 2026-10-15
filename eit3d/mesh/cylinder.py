@@ -24,12 +24,6 @@ _MESH_SCHEMA_VERSION = 1
 
 
 def mesh_cache_path(cfg: MeshConfig, cache_dir: Path = CACHE_DIR) -> Path:
-    """
-    Return a unique cache path derived from a hash of the MeshConfig.
-
-    The hash also includes _MESH_SCHEMA_VERSION, so changes in the
-    generation code invalidate old caches as well.
-    """
     payload = {"v": _MESH_SCHEMA_VERSION, **dataclasses.asdict(cfg)}
     key = hashlib.sha1(
         json.dumps(payload, sort_keys=True).encode()
@@ -38,7 +32,7 @@ def mesh_cache_path(cfg: MeshConfig, cache_dir: Path = CACHE_DIR) -> Path:
 
 
 class CylinderMesh:
-    
+
 
     def __init__(
         self,
@@ -56,7 +50,6 @@ class CylinderMesh:
         self._mesh_file.parent.mkdir(parents=True, exist_ok=True)
 
     def get(self) -> Tuple[dolfinx.mesh.Mesh, dolfinx.mesh.MeshTags]:
-        """Return (mesh, facet_tags), loading from cache if available."""
         if self._mesh is not None:
             return self._mesh, self._facet_tags
         if self.is_cached() and not self._force:

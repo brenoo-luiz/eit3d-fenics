@@ -18,7 +18,6 @@ VOLUME_TAG = 10
 
 
 def _readonly_vector(value) -> np.ndarray:
-    """Return a float copy of `value` that cannot be modified in place."""
     arr = np.array(value, dtype=float)
     arr.setflags(write=False)
     return arr
