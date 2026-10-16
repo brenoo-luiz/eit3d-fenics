@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Runs the test suite before each commit and blocks it if any test fails.
+
+if git diff --cached --quiet -- '*.py' environment.yml; then
+    exit 0
+fi
+
+if ! command -v pytest > /dev/null; then
+    echo "pre-commit: pytest não encontrado. Ative o ambiente (conda activate eit3d-env) e tente de novo."
+    exit 1
+fi
+
+echo "pre-commit: rodando os testes..."
+if ! pytest -q; then
+    echo "pre-commit: testes falharam, commit bloqueado."
+    exit 1
+fi
