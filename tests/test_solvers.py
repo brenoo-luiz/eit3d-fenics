@@ -12,7 +12,10 @@ from mpi4py import MPI
 from eit3d.config import ConductivityConfig, EtaConfig, SolverConfig
 from eit3d.fields.conductivity import ConductivityField, DirectionalField
 from eit3d.solvers import (
-    AdjointSolver, DerivativeSolver, ForwardSolver, NeumannSolver,
+    AdjointSolver,
+    DerivativeSolver,
+    ForwardSolver,
+    NeumannSolver,
 )
 
 COMM = MPI.COMM_WORLD
@@ -45,7 +48,8 @@ def omega(mesh_data, fields, u_gamma):
 # Helpers
 def integrate(expr) -> float:
     return COMM.allreduce(
-        dolfinx.fem.assemble_scalar(dolfinx.fem.form(expr)), op=MPI.SUM,
+        dolfinx.fem.assemble_scalar(dolfinx.fem.form(expr)),
+        op=MPI.SUM,
     )
 
 
@@ -60,17 +64,22 @@ def test_manufactured_solution(mesh_data):
     mesh, _, V = mesh_data
     x = ufl.SpatialCoordinate(mesh)
     n = ufl.FacetNormal(mesh)
-    ue = x[0]**2 - x[1]**2
+    ue = x[0] ** 2 - x[1] ** 2
     one = dolfinx.fem.Constant(mesh, dolfinx.default_scalar_type(1.0))
 
     u_h = NeumannSolver(
-        mesh, V, gamma=one, g=ufl.dot(ufl.grad(ue), n), config=SOLVER, comm=COMM,
+        mesh,
+        V,
+        gamma=one,
+        g=ufl.dot(ufl.grad(ue), n),
+        config=SOLVER,
+        comm=COMM,
     ).solve()
 
     ds = ufl.Measure("ds", domain=mesh)
     c = integrate(ue * ds) / integrate(one * ds)
-    err = np.sqrt(integrate((u_h - (ue - c))**2 * ufl.dx))
-    ref = np.sqrt(integrate((ue - c)**2 * ufl.dx))
+    err = np.sqrt(integrate((u_h - (ue - c)) ** 2 * ufl.dx))
+    ref = np.sqrt(integrate((ue - c) ** 2 * ufl.dx))
     assert err / ref < 1e-8
 
 
@@ -107,7 +116,7 @@ def test_derivative_first_order_consistency(mesh_data, fields, u_gamma, omega):
         u_t = ForwardSolver(mesh, facet_tags, V, gamma_t, SOLVER, COMM).solve()
         diff.x.array[:] = (u_t.x.array - u_gamma.x.array) / t
         diff.x.scatter_forward()
-        y_vals[k] = np.sqrt(integrate((diff - omega)**2 * ds)) / norm_om
+        y_vals[k] = np.sqrt(integrate((diff - omega) ** 2 * ds)) / norm_om
 
     slope = np.polyfit(np.log10(t_vals), np.log10(y_vals), 1)[0]
     assert 0.95 < slope < 1.05
@@ -118,7 +127,7 @@ def test_adjoint_relation(mesh_data, fields, u_gamma, omega):
     gamma, sigma = fields
     x = ufl.SpatialCoordinate(mesh)
     ds = ufl.Measure("ds", domain=mesh)
-    h = x[2]**3 + x[0] * x[2]
+    h = x[2] ** 3 + x[0] * x[2]
 
     adj = AdjointSolver(mesh, V, gamma, u_gamma, h, SOLVER, COMM).solve()
 

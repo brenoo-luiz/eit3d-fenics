@@ -5,7 +5,10 @@ pyvista = pytest.importorskip("pyvista")
 
 from eit3d.config import ConductivityConfig, EITConfig, EtaConfig, MeshConfig
 from eit3d.visualization import (
-    BaseRenderer, InteractiveRenderer, StaticRenderer, SurfacePanel,
+    BaseRenderer,
+    InteractiveRenderer,
+    StaticRenderer,
+    SurfacePanel,
 )
 
 pytestmark = pytest.mark.filterwarnings(
@@ -13,7 +16,8 @@ pytestmark = pytest.mark.filterwarnings(
 )
 
 requires_rendering = pytest.mark.skipif(
-    not pyvista.system_supports_plotting(), reason="off-screen rendering unavailable",
+    not pyvista.system_supports_plotting(),
+    reason="off-screen rendering unavailable",
 )
 
 
@@ -68,7 +72,9 @@ def test_section_circle_misses_sphere():
 def test_consistency_figure(tmp_path):
     t = 0.9 ** np.arange(60)
     y = 0.27 * t
-    fit = np.polyval(np.polyfit(np.log10(t[:40]), np.log10(y[:40]), 1), np.log10(t[:40]))
+    fit = np.polyval(
+        np.polyfit(np.log10(t[:40]), np.log10(y[:40]), 1), np.log10(t[:40])
+    )
     out = StaticRenderer(EITConfig(), tmp_path).render_consistency(y, t, 1.0, fit, 59)
     assert out.exists() and out.stat().st_size > 0
 
@@ -80,7 +86,7 @@ def test_static_figures(tmp_path, mesh_data):
     mesh, _, V = mesh_data
     topo, ct, geo = dolfinx.plot.vtk_mesh(V)
     grid = pyvista.UnstructuredGrid(topo, ct, geo)
-    grid["u"] = V.tabulate_dof_coordinates()[:, 2]   # u = z
+    grid["u"] = V.tabulate_dof_coordinates()[:, 2]  # u = z
 
     renderer = StaticRenderer(EITConfig(), tmp_path)
     outputs = [
@@ -94,6 +100,7 @@ def test_static_figures(tmp_path, mesh_data):
         assert out.exists() and out.stat().st_size > 0
     assert not list(tmp_path.glob("_tmp_*")), "temporary files left behind"
 
+
 def test_inversion_figures(tmp_path):
     k = np.arange(201)
     res = 0.01 + 0.15 * np.exp(-k / 20)
@@ -102,7 +109,9 @@ def test_inversion_figures(tmp_path):
     outputs = [
         renderer.render_inversion_history(res, err, 1.0, "history.png", floor=0.02),
         renderer.render_inversion_history(res, err, 1.0, "history_no_floor.png"),
-        renderer.render_step_comparison({1.0: res, 0.1: res + 0.02}, "comparison.png", floor=0.02),
+        renderer.render_step_comparison(
+            {1.0: res, 0.1: res + 0.02}, "comparison.png", floor=0.02
+        ),
     ]
     for out in outputs:
         assert out.exists() and out.stat().st_size > 0
@@ -111,6 +120,10 @@ def test_inversion_figures(tmp_path):
 @requires_rendering
 def test_inclusions_figure(tmp_path):
     out = StaticRenderer(EITConfig(), tmp_path).render_inclusions(
-        ((0.4, 0.0, 0.4), (-0.4, 0.0, -0.4)), 0.25, 10.0, 1.0, "inclusions.png",
+        ((0.4, 0.0, 0.4), (-0.4, 0.0, -0.4)),
+        0.25,
+        10.0,
+        1.0,
+        "inclusions.png",
     )
     assert out.exists() and out.stat().st_size > 0

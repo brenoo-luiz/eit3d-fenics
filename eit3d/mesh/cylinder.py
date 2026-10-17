@@ -5,7 +5,6 @@ import hashlib
 import json
 import logging
 from pathlib import Path
-from typing import Optional, Tuple
 
 import dolfinx
 import dolfinx.io
@@ -14,7 +13,11 @@ from dolfinx.io import gmsh as gmshio
 from mpi4py import MPI
 
 from eit3d.config import (
-    CACHE_DIR, TOP_TAG, BOTTOM_TAG, LATERAL_TAG, VOLUME_TAG,
+    BOTTOM_TAG,
+    CACHE_DIR,
+    LATERAL_TAG,
+    TOP_TAG,
+    VOLUME_TAG,
     MeshConfig,
 )
 
@@ -25,31 +28,27 @@ _MESH_SCHEMA_VERSION = 1
 
 def mesh_cache_path(cfg: MeshConfig, cache_dir: Path = CACHE_DIR) -> Path:
     payload = {"v": _MESH_SCHEMA_VERSION, **dataclasses.asdict(cfg)}
-    key = hashlib.sha1(
-        json.dumps(payload, sort_keys=True).encode()
-    ).hexdigest()[:10]
+    key = hashlib.sha1(json.dumps(payload, sort_keys=True).encode()).hexdigest()[:10]
     return cache_dir / f"mesh_{key}.xdmf"
 
 
 class CylinderMesh:
-
-
     def __init__(
         self,
-        config   : MeshConfig,
-        comm     : MPI.Comm = MPI.COMM_WORLD,
-        force    : bool = False,
+        config: MeshConfig,
+        comm: MPI.Comm = MPI.COMM_WORLD,
+        force: bool = False,
         cache_dir: Path = CACHE_DIR,
     ) -> None:
         self._config = config
         self._comm = comm
         self._force = force
         self._mesh_file = mesh_cache_path(config, cache_dir)
-        self._mesh       : Optional[dolfinx.mesh.Mesh] = None
-        self._facet_tags : Optional[dolfinx.mesh.MeshTags] = None
+        self._mesh: dolfinx.mesh.Mesh | None = None
+        self._facet_tags: dolfinx.mesh.MeshTags | None = None
         self._mesh_file.parent.mkdir(parents=True, exist_ok=True)
 
-    def get(self) -> Tuple[dolfinx.mesh.Mesh, dolfinx.mesh.MeshTags]:
+    def get(self) -> tuple[dolfinx.mesh.Mesh, dolfinx.mesh.MeshTags]:
         if self._mesh is not None:
             return self._mesh, self._facet_tags
         if self.is_cached() and not self._force:
@@ -86,8 +85,12 @@ class CylinderMesh:
         try:
             half_h = self._config.height / 2.0
             gmsh.model.occ.addCylinder(
-                0, 0, -half_h,
-                0, 0, self._config.height,
+                0,
+                0,
+                -half_h,
+                0,
+                0,
+                self._config.height,
                 self._config.radius,
             )
             gmsh.model.occ.synchronize()
@@ -108,15 +111,16 @@ class CylinderMesh:
             gmsh.model.addPhysicalGroup(2, bot_surfs, tag=BOTTOM_TAG)
             gmsh.model.addPhysicalGroup(2, lat_surfs, tag=LATERAL_TAG)
             gmsh.model.addPhysicalGroup(
-                3, [v[1] for v in gmsh.model.getEntities(dim=3)],
+                3,
+                [v[1] for v in gmsh.model.getEntities(dim=3)],
                 tag=VOLUME_TAG,
             )
 
             gmsh.option.setNumber("Mesh.CharacteristicLengthMax", self._config.size_max)
             gmsh.option.setNumber("Mesh.CharacteristicLengthMin", self._config.size_min)
-            gmsh.option.setNumber("Mesh.Algorithm",      6)
-            gmsh.option.setNumber("Mesh.Algorithm3D",    1)
-            gmsh.option.setNumber("Mesh.Optimize",       1)
+            gmsh.option.setNumber("Mesh.Algorithm", 6)
+            gmsh.option.setNumber("Mesh.Algorithm3D", 1)
+            gmsh.option.setNumber("Mesh.Optimize", 1)
             gmsh.option.setNumber("Mesh.OptimizeNetgen", 1)
 
             gmsh.model.mesh.generate(3)
@@ -131,13 +135,15 @@ class CylinderMesh:
 
         logger.info(
             "Mesh generated: %d cells, %d vertices",
-            self.n_cells, self.n_vertices,
+            self.n_cells,
+            self.n_vertices,
         )
 
     def _save(self) -> None:
         logger.info("Saving mesh to %s ...", self._mesh_file)
         self._mesh.topology.create_connectivity(
-            self._mesh.topology.dim - 1, self._mesh.topology.dim,
+            self._mesh.topology.dim - 1,
+            self._mesh.topology.dim,
         )
         with dolfinx.io.XDMFFile(self._comm, str(self._mesh_file), "w") as xdmf:
             xdmf.write_mesh(self._mesh)
@@ -148,10 +154,12 @@ class CylinderMesh:
         with dolfinx.io.XDMFFile(self._comm, str(self._mesh_file), "r") as xdmf:
             self._mesh = xdmf.read_mesh(name="mesh")
             self._mesh.topology.create_connectivity(
-                self._mesh.topology.dim - 1, self._mesh.topology.dim,
+                self._mesh.topology.dim - 1,
+                self._mesh.topology.dim,
             )
             self._facet_tags = xdmf.read_meshtags(self._mesh, name="facet_tags")
         logger.info(
             "Mesh loaded: %d cells, %d vertices",
-            self.n_cells, self.n_vertices,
+            self.n_cells,
+            self.n_vertices,
         )

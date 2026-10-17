@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import logging
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -34,7 +34,11 @@ GREY = "#c4c7cc"
 GLASS = "#cfd8e3"
 RIM = "#8a9099"
 
-FONT = "Inter" if any(f.name == "Inter" for f in font_manager.fontManager.ttflist) else "DejaVu Sans"
+FONT = (
+    "Inter"
+    if any(f.name == "Inter" for f in font_manager.fontManager.ttflist)
+    else "DejaVu Sans"
+)
 
 STYLE = {
     "font.family": FONT,
@@ -72,21 +76,20 @@ class SurfacePanel:
     scalar: str
     title: str
     cmap: str = "coolwarm"
-    clim: Optional[Tuple[float, float]] = None
-    bar: Optional[str] = None
+    clim: tuple[float, float] | None = None
+    bar: str | None = None
 
 
 @dataclass(frozen=True)
 class _Panel:
     image: np.ndarray
     title: str
-    cmap: Optional[str] = None
-    clim: Optional[Tuple[float, float]] = None
-    label: Optional[str] = None
+    cmap: str | None = None
+    clim: tuple[float, float] | None = None
+    label: str | None = None
 
 
 class StaticRenderer(BaseRenderer):
-
     BG = "white"
     WINDOW_SIZE = (1100, 1100)
     DPI = 300
@@ -98,23 +101,43 @@ class StaticRenderer(BaseRenderer):
         self._output_dir.mkdir(parents=True, exist_ok=True)
 
     # Public figures
-    def render_mesh(self, grid: pyvista.UnstructuredGrid, filename: str = "step1_mesh.png") -> Path:
+    def render_mesh(
+        self, grid: pyvista.UnstructuredGrid, filename: str = "step1_mesh.png"
+    ) -> Path:
         p = self._plotter()
-        p.add_mesh(grid, color="#f4f6f9", show_edges=True, edge_color="#8fb3e3", line_width=0.3,
-                    ambient=0.6, diffuse=0.45, specular=0.0)
+        p.add_mesh(
+            grid,
+            color="#f4f6f9",
+            show_edges=True,
+            edge_color="#8fb3e3",
+            line_width=0.3,
+            ambient=0.6,
+            diffuse=0.45,
+            specular=0.0,
+        )
         self._frame(p)
         mesh = self._config.mesh
         return self._compose(
-            [_Panel(self._snap(p), f"Malha\nraio {self._fmt(mesh.radius)}, altura {self._fmt(mesh.height)}")],
-            filename, width=6,
+            [
+                _Panel(
+                    self._snap(p),
+                    f"Malha\nraio {self._fmt(mesh.radius)}, altura {self._fmt(mesh.height)}",
+                )
+            ],
+            filename,
+            width=6,
         )
 
     def render_geometry(self, filename: str = "step3_a_geometry.png") -> Path:
         gam, eta = self._config.conductivity, self._config.eta
         left, right = self._geometry_titles()
         img_gamma = self._geometry_image([(self._sphere(gam.center, gam.radius), BLUE)])
-        img_eta = self._geometry_image([(self._sphere(c, eta.radius), ORANGE) for c in eta.centers])
-        return self._compose([_Panel(img_gamma, left), _Panel(img_eta, right)], filename)
+        img_eta = self._geometry_image(
+            [(self._sphere(c, eta.radius), ORANGE) for c in eta.centers]
+        )
+        return self._compose(
+            [_Panel(img_gamma, left), _Panel(img_eta, right)], filename
+        )
 
     def render_inclusions(
         self,
@@ -133,13 +156,37 @@ class StaticRenderer(BaseRenderer):
             ax.imshow(image)
             ax.axis("off")
             handles = [
-                Line2D([], [], marker="o", linestyle="", markersize=11, markerfacecolor=BLUE,
-                        markeredgewidth=0, label=f"esferas  γ = {self._fmt(inside)}"),
-                Line2D([], [], marker="o", linestyle="", markersize=11, markerfacecolor="#e3e7ec",
-                        markeredgecolor=INK_FAINT, label=f"cilindro  γ = {self._fmt(outside)}"),
+                Line2D(
+                    [],
+                    [],
+                    marker="o",
+                    linestyle="",
+                    markersize=11,
+                    markerfacecolor=BLUE,
+                    markeredgewidth=0,
+                    label=f"esferas  γ = {self._fmt(inside)}",
+                ),
+                Line2D(
+                    [],
+                    [],
+                    marker="o",
+                    linestyle="",
+                    markersize=11,
+                    markerfacecolor="#e3e7ec",
+                    markeredgecolor=INK_FAINT,
+                    label=f"cilindro  γ = {self._fmt(outside)}",
+                ),
             ]
-            ax.legend(handles=handles, loc="upper center", bbox_to_anchor=(0.5, -0.005), ncol=2,
-                        fontsize=10, labelcolor=INK_SOFT, handletextpad=0.4, columnspacing=2.2)
+            ax.legend(
+                handles=handles,
+                loc="upper center",
+                bbox_to_anchor=(0.5, -0.005),
+                ncol=2,
+                fontsize=10,
+                labelcolor=INK_SOFT,
+                handletextpad=0.4,
+                columnspacing=2.2,
+            )
             return self._save(fig, filename)
 
     def render_forward(
@@ -153,9 +200,20 @@ class StaticRenderer(BaseRenderer):
         left, right = self._forward_titles(pattern)
         return self._compose(
             [
-                _Panel(self._surface_image(grid, scalar, "coolwarm", clim), left, "coolwarm", clim, r"$u_\gamma$"),
-                _Panel(self._inclusion_section_image(grid, scalar, "coolwarm", clim), right,
-                        "coolwarm", clim, r"$u_\gamma$"),
+                _Panel(
+                    self._surface_image(grid, scalar, "coolwarm", clim),
+                    left,
+                    "coolwarm",
+                    clim,
+                    r"$u_\gamma$",
+                ),
+                _Panel(
+                    self._inclusion_section_image(grid, scalar, "coolwarm", clim),
+                    right,
+                    "coolwarm",
+                    clim,
+                    r"$u_\gamma$",
+                ),
             ],
             filename,
         )
@@ -171,12 +229,25 @@ class StaticRenderer(BaseRenderer):
         img_geo = self._geometry_image([(self._sphere(gam.center, gam.radius), BLUE)])
         return self._compose(
             [
-                _Panel(img_geo, f"Condutividade\nγ = {self._fmt(gam.gamma_in)} na esfera, "
-                                f"{self._fmt(gam.gamma_out)} fora"),
-                _Panel(self._surface_image(grid, scalar, "coolwarm", clim), "Potencial u\nsuperfície",
-                        "coolwarm", clim, "u"),
-                _Panel(self._inclusion_section_image(grid, scalar, "coolwarm", clim),
-                        f"Potencial u\ncorte em x = {self._fmt(gam.center[0])}", "coolwarm", clim, "u"),
+                _Panel(
+                    img_geo,
+                    f"Condutividade\nγ = {self._fmt(gam.gamma_in)} na esfera, "
+                    f"{self._fmt(gam.gamma_out)} fora",
+                ),
+                _Panel(
+                    self._surface_image(grid, scalar, "coolwarm", clim),
+                    "Potencial u\nsuperfície",
+                    "coolwarm",
+                    clim,
+                    "u",
+                ),
+                _Panel(
+                    self._inclusion_section_image(grid, scalar, "coolwarm", clim),
+                    f"Potencial u\ncorte em x = {self._fmt(gam.center[0])}",
+                    "coolwarm",
+                    clim,
+                    "u",
+                ),
             ],
             filename,
         )
@@ -191,14 +262,33 @@ class StaticRenderer(BaseRenderer):
         clim = self._symmetric_clim(grid, scalar)
         plane = float(self._config.eta.centers[0][AXES["y"]])
         overlays = [
-            self._section_circle(c, self._config.eta.radius, AXES["y"], plane) for c in self._config.eta.centers
+            self._section_circle(c, self._config.eta.radius, AXES["y"], plane)
+            for c in self._config.eta.centers
         ]
         return self._compose(
             [
-                _Panel(self._surface_image(grid, scalar, "RdBu_r", clim),
-                        f"Derivada ω\nsuperfície, ∫ω ds = {integral:.1e}", "RdBu_r", clim, "ω"),
-                _Panel(self._section_image(grid, scalar, "RdBu_r", clim, axis="y", plane=plane, overlays=overlays),
-                        f"Derivada ω\ncorte em y = {self._fmt(plane)}, círculos: esferas de η", "RdBu_r", clim, "ω"),
+                _Panel(
+                    self._surface_image(grid, scalar, "RdBu_r", clim),
+                    f"Derivada ω\nsuperfície, ∫ω ds = {integral:.1e}",
+                    "RdBu_r",
+                    clim,
+                    "ω",
+                ),
+                _Panel(
+                    self._section_image(
+                        grid,
+                        scalar,
+                        "RdBu_r",
+                        clim,
+                        axis="y",
+                        plane=plane,
+                        overlays=overlays,
+                    ),
+                    f"Derivada ω\ncorte em y = {self._fmt(plane)}, círculos: esferas de η",
+                    "RdBu_r",
+                    clim,
+                    "ω",
+                ),
             ],
             filename,
         )
@@ -207,10 +297,15 @@ class StaticRenderer(BaseRenderer):
         images = []
         for pn in panels:
             clim = pn.clim if pn.clim is not None else self._clim(pn.grid, pn.scalar)
-            images.append(_Panel(
-                self._surface_image(pn.grid, pn.scalar, pn.cmap, clim), pn.title, pn.cmap, clim,
-                pn.bar if pn.bar is not None else pn.scalar,
-            ))
+            images.append(
+                _Panel(
+                    self._surface_image(pn.grid, pn.scalar, pn.cmap, clim),
+                    pn.title,
+                    pn.cmap,
+                    clim,
+                    pn.bar if pn.bar is not None else pn.scalar,
+                )
+            )
         return self._compose(images, filename)
 
     def render_consistency(
@@ -228,14 +323,43 @@ class StaticRenderer(BaseRenderer):
 
         with plt.rc_context(STYLE):
             fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11, 4.6))
-            fig.subplots_adjust(left=0.08, right=0.9, top=0.78, bottom=0.14, wspace=0.32)
-            self._header(fig, f"Teste da derivada  ·  t = {self._fmt(self._config.consistency.base)}ⁿ")
+            fig.subplots_adjust(
+                left=0.08, right=0.9, top=0.78, bottom=0.14, wspace=0.32
+            )
+            self._header(
+                fig,
+                f"Teste da derivada  ·  t = {self._fmt(self._config.consistency.base)}ⁿ",
+            )
 
-            ax1.semilogy(ns, y_vals, color=BLUE, linewidth=1.6, marker="o", markersize=2.5, zorder=3)
-            ax1.plot(idx_min, y_vals[idx_min], "o", markersize=8, markerfacecolor="white",
-                    markeredgecolor=INK, markeredgewidth=1.2, zorder=4)
-            ax1.annotate(f"mínimo  {y_vals[idx_min]:.1e}", (idx_min, y_vals[idx_min]), xytext=(-10, -10),
-                        textcoords="offset points", ha="right", va="top", fontsize=9, color=INK)
+            ax1.semilogy(
+                ns,
+                y_vals,
+                color=BLUE,
+                linewidth=1.6,
+                marker="o",
+                markersize=2.5,
+                zorder=3,
+            )
+            ax1.plot(
+                idx_min,
+                y_vals[idx_min],
+                "o",
+                markersize=8,
+                markerfacecolor="white",
+                markeredgecolor=INK,
+                markeredgewidth=1.2,
+                zorder=4,
+            )
+            ax1.annotate(
+                f"mínimo  {y_vals[idx_min]:.1e}",
+                (idx_min, y_vals[idx_min]),
+                xytext=(-10, -10),
+                textcoords="offset points",
+                ha="right",
+                va="top",
+                fontsize=9,
+                color=INK,
+            )
             self._panel(ax1, "Erro por perturbação", "yₙ")
             ax1.set_xlabel("n")
             ax1.set_xlim(0, ns[-1])
@@ -244,15 +368,48 @@ class StaticRenderer(BaseRenderer):
             ax1.yaxis.set_minor_locator(NullLocator())
 
             ax2.grid(True, axis="both")
-            ax2.loglog(t_vals, theory, color=INK_FAINT, linewidth=0.9, linestyle=(0, (4, 3)), zorder=2)
-            ax2.loglog(t_vals, y_vals, "o", color=BLUE, markersize=3, markeredgewidth=0, alpha=0.85, zorder=3)
-            ax2.loglog(t_vals[:n_fit], 10 ** fit_line, color=INK, linewidth=1.3, zorder=4)
+            ax2.loglog(
+                t_vals,
+                theory,
+                color=INK_FAINT,
+                linewidth=0.9,
+                linestyle=(0, (4, 3)),
+                zorder=2,
+            )
+            ax2.loglog(
+                t_vals,
+                y_vals,
+                "o",
+                color=BLUE,
+                markersize=3,
+                markeredgewidth=0,
+                alpha=0.85,
+                zorder=3,
+            )
+            ax2.loglog(t_vals[:n_fit], 10**fit_line, color=INK, linewidth=1.3, zorder=4)
             ax2.invert_xaxis()
             mid = n_fit // 2
-            ax2.annotate(f"inclinação {slope:.3f}", (t_vals[mid], 10 ** fit_line[mid]), xytext=(10, 10),
-                            textcoords="offset points", ha="left", va="bottom", fontsize=9.5, color=INK, fontweight="bold")
-            ax2.annotate("teoria: inclinação 1", (t_vals[-1], theory[-1]), xytext=(-4, -8), textcoords="offset points",
-                            ha="right", va="top", fontsize=8.5, color=INK_SOFT)
+            ax2.annotate(
+                f"inclinação {slope:.3f}",
+                (t_vals[mid], 10 ** fit_line[mid]),
+                xytext=(10, 10),
+                textcoords="offset points",
+                ha="left",
+                va="bottom",
+                fontsize=9.5,
+                color=INK,
+                fontweight="bold",
+            )
+            ax2.annotate(
+                "teoria: inclinação 1",
+                (t_vals[-1], theory[-1]),
+                xytext=(-4, -8),
+                textcoords="offset points",
+                ha="right",
+                va="top",
+                fontsize=8.5,
+                color=INK_SOFT,
+            )
             ax2.set_ylim(min(y_vals.min(), theory.min()) * 0.08, y_vals.max() * 3)
             ax2.xaxis.set_minor_locator(NullLocator())
             ax2.yaxis.set_minor_locator(NullLocator())
@@ -266,16 +423,21 @@ class StaticRenderer(BaseRenderer):
         errors: np.ndarray,
         step: float,
         filename: str,
-        floor: Optional[float] = None,
-        title: Optional[str] = None,
+        floor: float | None = None,
+        title: str | None = None,
     ) -> Path:
         res = np.asarray(residuals)
         err = np.asarray(errors)
         ks = np.arange(len(res))
         with plt.rc_context(STYLE):
             fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11, 4.6))
-            fig.subplots_adjust(left=0.08, right=0.92, top=0.78, bottom=0.14, wspace=0.3)
-            self._header(fig, title if title is not None else f"Método do gradiente  ·  λ = {step:g}")
+            fig.subplots_adjust(
+                left=0.08, right=0.92, top=0.78, bottom=0.14, wspace=0.3
+            )
+            self._header(
+                fig,
+                title if title is not None else f"Método do gradiente  ·  λ = {step:g}",
+            )
 
             ax1.semilogy(ks, res, color=BLUE, linewidth=2, zorder=3)
             self._end_label(ax1, ks[-1], res[-1], f"{res[-1]:.3g}", BLUE, bold=True)
@@ -299,9 +461,9 @@ class StaticRenderer(BaseRenderer):
 
     def render_step_comparison(
         self,
-        residuals: Dict[float, np.ndarray],
+        residuals: dict[float, np.ndarray],
         filename: str,
-        floor: Optional[float] = None,
+        floor: float | None = None,
     ) -> Path:
         highlight = max(residuals)
         k_max = max(len(r) for r in residuals.values()) - 1
@@ -313,8 +475,13 @@ class StaticRenderer(BaseRenderer):
             for step in sorted(residuals):
                 res = np.asarray(residuals[step])
                 main = step == highlight
-                ax.semilogy(np.arange(len(res)), res, color=BLUE if main else GREY,
-                            linewidth=2.4 if main else 1.6, zorder=3 if main else 2)
+                ax.semilogy(
+                    np.arange(len(res)),
+                    res,
+                    color=BLUE if main else GREY,
+                    linewidth=2.4 if main else 1.6,
+                    zorder=3 if main else 2,
+                )
                 values.append(res)
             if floor is not None:
                 self._floor(ax, k_max, floor)
@@ -323,25 +490,35 @@ class StaticRenderer(BaseRenderer):
             ax.set_xlim(0, k_max)
             ax.xaxis.set_major_locator(MaxNLocator(integer=True))
             labels = [(step, residuals[step][-1]) for step in sorted(residuals)]
-            for (step, _), height in zip(labels, self._spread_labels(ax, [y for _, y in labels])):
+            for (step, _), height in zip(
+                labels, self._spread_labels(ax, [y for _, y in labels])
+            ):
                 main = step == highlight
-                ax.text(k_max, height, f"  λ = {step:g}", transform=blended_transform_factory(ax.transData, ax.transAxes),
-                        ha="left", va="center", fontsize=9.5, color=BLUE if main else INK_SOFT,
-                        fontweight="bold" if main else "normal")
+                ax.text(
+                    k_max,
+                    height,
+                    f"  λ = {step:g}",
+                    transform=blended_transform_factory(ax.transData, ax.transAxes),
+                    ha="left",
+                    va="center",
+                    fontsize=9.5,
+                    color=BLUE if main else INK_SOFT,
+                    fontweight="bold" if main else "normal",
+                )
             ax.set_xlabel("iteração k")
             ax.set_ylabel("‖F(γₖ) − ũ‖")
             return self._save(fig, filename)
 
     def render_conductivity_sections(
         self,
-        fields: Sequence[Tuple[str, object]],
+        fields: Sequence[tuple[str, object]],
         filename: str,
-        spheres: Sequence[Tuple[Sequence[float], float]] = (),
+        spheres: Sequence[tuple[Sequence[float], float]] = (),
         axis: str = "y",
         plane: float = 0.0,
-        clim: Optional[Tuple[float, float]] = None,
+        clim: tuple[float, float] | None = None,
         ncols: int = 4,
-        clims: Optional[Sequence[Optional[Tuple[float, float]]]] = None,
+        clims: Sequence[tuple[float, float] | None] | None = None,
     ) -> Path:
         import dolfinx.plot
 
@@ -356,17 +533,21 @@ class StaticRenderer(BaseRenderer):
             grid = pyvista.UnstructuredGrid(topo, ct, geo)
             grid.cell_data["gamma"] = f.x.array[f.function_space.dofmap.list[cells, 0]]
             lims = panel_clim if panel_clim is not None else self._clim(grid, "gamma")
-            image = self._section_image(grid, "gamma", "viridis", lims, axis, plane, overlays)
+            image = self._section_image(
+                grid, "gamma", "viridis", lims, axis, plane, overlays
+            )
             panels.append(_Panel(image, self._math_title(title), "viridis", lims, "γ"))
 
         shared = None
         if len(panels) > 2 and len({p.clim for p in panels[1:]}) == 1:
             shared = ("viridis", panels[1].clim, "γ")
             panels = panels[:1] + [_Panel(p.image, p.title) for p in panels[1:]]
-        return self._compose(panels, filename, ncols=ncols, width=3.4, shared_bar=shared)
+        return self._compose(
+            panels, filename, ncols=ncols, width=3.4, shared_bar=shared
+        )
 
     # Titles
-    def _geometry_titles(self) -> List[str]:
+    def _geometry_titles(self) -> list[str]:
         gam, eta = self._config.conductivity, self._config.eta
         n = len(eta.centers)
         centers = ", ".join(self._fmt_point(c) for c in eta.centers)
@@ -376,7 +557,7 @@ class StaticRenderer(BaseRenderer):
             f"Direção η\n{n} esfera{'s' if n != 1 else ''} r={self._fmt(eta.radius)} em {centers}",
         ]
 
-    def _forward_titles(self, pattern: int) -> List[str]:
+    def _forward_titles(self, pattern: int) -> list[str]:
         g_top, g_bot = self._config.current.patterns[pattern]
         x0 = self._fmt(self._config.conductivity.center[0])
         return [
@@ -387,20 +568,43 @@ class StaticRenderer(BaseRenderer):
     # Line plot helpers
     @staticmethod
     def _header(fig, title: str) -> None:
-        fig.text(0.04, 0.95, title, fontsize=14, fontweight="bold", color=INK, ha="left", va="top")
+        fig.text(
+            0.04,
+            0.95,
+            title,
+            fontsize=14,
+            fontweight="bold",
+            color=INK,
+            ha="left",
+            va="top",
+        )
 
     @staticmethod
     def _panel(ax, title: str, ylabel: str) -> None:
-        ax.set_title(title, loc="left", fontsize=11.5, fontweight="bold", color=INK, pad=10)
+        ax.set_title(
+            title, loc="left", fontsize=11.5, fontweight="bold", color=INK, pad=10
+        )
         ax.set_ylabel(ylabel)
 
     @staticmethod
-    def _end_label(ax, x: float, y: float, text: str, color: str, bold: bool = False) -> None:
-        ax.annotate(text, (x, y), xytext=(6, 0), textcoords="offset points", va="center", ha="left",
-                    fontsize=9.5, color=color, fontweight="bold" if bold else "normal", annotation_clip=False)
+    def _end_label(
+        ax, x: float, y: float, text: str, color: str, bold: bool = False
+    ) -> None:
+        ax.annotate(
+            text,
+            (x, y),
+            xytext=(6, 0),
+            textcoords="offset points",
+            va="center",
+            ha="left",
+            fontsize=9.5,
+            color=color,
+            fontweight="bold" if bold else "normal",
+            annotation_clip=False,
+        )
 
     @staticmethod
-    def _spread_labels(ax, values: Sequence[float], gap: float = 0.05) -> List[float]:
+    def _spread_labels(ax, values: Sequence[float], gap: float = 0.05) -> list[float]:
         low, high = (np.log10(v) for v in ax.get_ylim())
         heights = [(np.log10(v) - low) / (high - low) for v in values]
         order = np.argsort(heights)
@@ -411,18 +615,48 @@ class StaticRenderer(BaseRenderer):
 
     @staticmethod
     def _floor(ax, x_end: float, floor: float, above: bool = False) -> None:
-        ax.axhline(floor, color=INK_FAINT, linewidth=0.9, linestyle=(0, (4, 3)), zorder=1)
+        ax.axhline(
+            floor, color=INK_FAINT, linewidth=0.9, linestyle=(0, (4, 3)), zorder=1
+        )
         y, va = (floor * 1.06, "bottom") if above else (floor * 0.94, "top")
-        ax.text(x_end, y, "resíduo da solução exata γ⁺", fontsize=8.5, color=INK_SOFT, ha="right", va=va)
+        ax.text(
+            x_end,
+            y,
+            "resíduo da solução exata γ⁺",
+            fontsize=8.5,
+            color=INK_SOFT,
+            ha="right",
+            va=va,
+        )
 
     @staticmethod
     def _mark_crossing(ax, k: int, k_end: int, floor: float) -> None:
-        ax.fill_between([k, k_end], ax.get_ylim()[0], floor, color=BLUE, alpha=0.06, linewidth=0, zorder=0)
+        ax.fill_between(
+            [k, k_end],
+            ax.get_ylim()[0],
+            floor,
+            color=BLUE,
+            alpha=0.06,
+            linewidth=0,
+            zorder=0,
+        )
         offset, rad = ((45, 55), 0.25) if k < 0.6 * k_end else ((-90, 55), -0.25)
-        ax.annotate(f"k = {k}", xy=(k, floor), xytext=offset, textcoords="offset points",
-                    fontsize=10, color=INK, fontweight="bold",
-                    arrowprops=dict(arrowstyle="-|>", color=INK, linewidth=0.9,
-                                    connectionstyle=f"arc3,rad={rad}", shrinkB=4))
+        ax.annotate(
+            f"k = {k}",
+            xy=(k, floor),
+            xytext=offset,
+            textcoords="offset points",
+            fontsize=10,
+            color=INK,
+            fontweight="bold",
+            arrowprops=dict(
+                arrowstyle="-|>",
+                color=INK,
+                linewidth=0.9,
+                connectionstyle=f"arc3,rad={rad}",
+                shrinkB=4,
+            ),
+        )
 
     @staticmethod
     def _log_axis(ax, values: np.ndarray) -> None:
@@ -434,7 +668,9 @@ class StaticRenderer(BaseRenderer):
 
     # Image builders
     def _plotter(self, window_size=None) -> pyvista.Plotter:
-        p = pyvista.Plotter(off_screen=True, window_size=window_size or self.WINDOW_SIZE)
+        p = pyvista.Plotter(
+            off_screen=True, window_size=window_size or self.WINDOW_SIZE
+        )
         p.set_background(self.BG)
         return p
 
@@ -464,27 +700,55 @@ class StaticRenderer(BaseRenderer):
     def _geometry_image(self, spheres) -> np.ndarray:
         mesh = self._config.mesh
         p = self._plotter()
-        p.add_mesh(self._cylinder(), color=GLASS, opacity=0.10, smooth_shading=True, specular=0.2)
+        p.add_mesh(
+            self._cylinder(),
+            color=GLASS,
+            opacity=0.10,
+            smooth_shading=True,
+            specular=0.2,
+        )
         for z in (-mesh.height / 2, mesh.height / 2):
-            rim = pyvista.Polygon(center=(0.0, 0.0, z), radius=mesh.radius, n_sides=200, fill=False)
+            rim = pyvista.Polygon(
+                center=(0.0, 0.0, z), radius=mesh.radius, n_sides=200, fill=False
+            )
             p.add_mesh(rim, color=RIM, line_width=2.5)
         for sphere, color in spheres:
-            p.add_mesh(sphere, color=color, smooth_shading=True, specular=0.5, specular_power=30)
+            p.add_mesh(
+                sphere,
+                color=color,
+                smooth_shading=True,
+                specular=0.5,
+                specular_power=30,
+            )
         self._frame(p)
         return self._snap(p)
 
     def _surface_image(self, grid, scalar: str, cmap: str, clim) -> np.ndarray:
         p = self._plotter()
-        p.add_mesh(grid.extract_surface(algorithm="dataset_surface"),
-                    scalars=scalar, cmap=cmap, clim=clim, show_scalar_bar=False,
-                    smooth_shading=True, ambient=0.55, diffuse=0.5, specular=0.0)
+        p.add_mesh(
+            grid.extract_surface(algorithm="dataset_surface"),
+            scalars=scalar,
+            cmap=cmap,
+            clim=clim,
+            show_scalar_bar=False,
+            smooth_shading=True,
+            ambient=0.55,
+            diffuse=0.5,
+            specular=0.0,
+        )
         self._frame(p)
         return self._snap(p)
 
     def _section_image(
-        self, grid, scalar: str, cmap: str, clim,
-        axis: str, plane: float, overlays: Sequence[pyvista.PolyData] = (),
-        bar: Optional[str] = None,
+        self,
+        grid,
+        scalar: str,
+        cmap: str,
+        clim,
+        axis: str,
+        plane: float,
+        overlays: Sequence[pyvista.PolyData] = (),
+        bar: str | None = None,
     ) -> np.ndarray:
         idx = AXES[axis]
         origin = [0.0, 0.0, 0.0]
@@ -493,8 +757,14 @@ class StaticRenderer(BaseRenderer):
         eye[idx] = plane + self._camera_distance()
 
         p = self._plotter()
-        p.add_mesh(grid.clip(normal=axis, origin=origin),
-                    scalars=scalar, cmap=cmap, clim=clim, show_scalar_bar=False, lighting=False)
+        p.add_mesh(
+            grid.clip(normal=axis, origin=origin),
+            scalars=scalar,
+            cmap=cmap,
+            clim=clim,
+            show_scalar_bar=False,
+            lighting=False,
+        )
         for overlay in overlays:
             if overlay.n_points:
                 p.add_mesh(overlay, color="#111111", line_width=2.5, lighting=False)
@@ -503,7 +773,9 @@ class StaticRenderer(BaseRenderer):
         p.reset_camera()
         return self._snap(p)
 
-    def _inclusion_section_image(self, grid, scalar: str, cmap: str, clim) -> np.ndarray:
+    def _inclusion_section_image(
+        self, grid, scalar: str, cmap: str, clim
+    ) -> np.ndarray:
         gam = self._config.conductivity
         plane = float(gam.center[AXES["x"]])
         circle = self._section_circle(gam.center, gam.radius, AXES["x"], plane)
@@ -511,16 +783,23 @@ class StaticRenderer(BaseRenderer):
 
     # Figure assembly
     def _compose(
-        self, panels: Sequence[_Panel], filename: str,
-        ncols: Optional[int] = None, width: float = 4.8,
-        shared_bar: Optional[Tuple[str, Tuple[float, float], str]] = None,
+        self,
+        panels: Sequence[_Panel],
+        filename: str,
+        ncols: int | None = None,
+        width: float = 4.8,
+        shared_bar: tuple[str, tuple[float, float], str] | None = None,
     ) -> Path:
         n = len(panels)
         ncols = n if ncols is None else min(ncols, n)
         nrows = int(np.ceil(n / ncols))
         with plt.rc_context(STYLE):
             fig, axes = plt.subplots(
-                nrows, ncols, figsize=(width * ncols, width * 1.1 * nrows), layout="constrained", squeeze=False,
+                nrows,
+                ncols,
+                figsize=(width * ncols, width * 1.1 * nrows),
+                layout="constrained",
+                squeeze=False,
             )
             axes = axes.ravel()
             for ax in axes:
@@ -530,7 +809,9 @@ class StaticRenderer(BaseRenderer):
                 ax.imshow(self._pad_to_ratio(panel.image, ratio))
                 self._panel_title(ax, panel.title)
                 if panel.cmap is not None and panel.clim is not None:
-                    self._colorbar(fig, ax, panel.cmap, panel.clim, panel.label, shrink=0.7)
+                    self._colorbar(
+                        fig, ax, panel.cmap, panel.clim, panel.label, shrink=0.7
+                    )
             if shared_bar is not None:
                 without_bar = [ax for ax, p in zip(axes, panels) if p.cmap is None]
                 self._colorbar(fig, without_bar, *shared_bar, shrink=0.5)
@@ -547,15 +828,39 @@ class StaticRenderer(BaseRenderer):
     @staticmethod
     def _panel_title(ax, title: str) -> None:
         main, _, detail = title.partition("\n")
-        ax.set_title(main, loc="left", fontsize=11.5, fontweight="bold", color=INK, pad=18 if detail else 8)
+        ax.set_title(
+            main,
+            loc="left",
+            fontsize=11.5,
+            fontweight="bold",
+            color=INK,
+            pad=18 if detail else 8,
+        )
         if detail:
-            ax.text(0.0, 1.0, detail, transform=ax.transAxes, ha="left", va="bottom",
-                    fontsize=9, color=INK_SOFT)
+            ax.text(
+                0.0,
+                1.0,
+                detail,
+                transform=ax.transAxes,
+                ha="left",
+                va="bottom",
+                fontsize=9,
+                color=INK_SOFT,
+            )
 
     @staticmethod
-    def _colorbar(fig, ax, cmap: str, clim: Tuple[float, float], label: Optional[str], shrink: float) -> None:
+    def _colorbar(
+        fig,
+        ax,
+        cmap: str,
+        clim: tuple[float, float],
+        label: str | None,
+        shrink: float,
+    ) -> None:
         mappable = ScalarMappable(norm=Normalize(*clim), cmap=cmap)
-        bar = fig.colorbar(mappable, ax=ax, fraction=0.04, pad=0.02, shrink=shrink, aspect=30)
+        bar = fig.colorbar(
+            mappable, ax=ax, fraction=0.04, pad=0.02, shrink=shrink, aspect=30
+        )
         bar.outline.set_visible(False)
         bar.ax.tick_params(labelsize=8.5, colors=INK_SOFT, length=0)
         if label:
@@ -574,10 +879,10 @@ class StaticRenderer(BaseRenderer):
         return out
 
     @staticmethod
-    def _clim(grid, scalar: str) -> Tuple[float, float]:
+    def _clim(grid, scalar: str) -> tuple[float, float]:
         return float(grid[scalar].min()), float(grid[scalar].max())
 
     @staticmethod
-    def _symmetric_clim(grid, scalar: str) -> Tuple[float, float]:
+    def _symmetric_clim(grid, scalar: str) -> tuple[float, float]:
         m = float(np.abs(grid[scalar]).max())
         return -m, m

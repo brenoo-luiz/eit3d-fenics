@@ -49,7 +49,9 @@ def main() -> None:
     ds = ufl.Measure("ds", domain=mesh)
 
     def integrate(expr) -> float:
-        return comm.allreduce(dolfinx.fem.assemble_scalar(dolfinx.fem.form(expr)), op=MPI.SUM)
+        return comm.allreduce(
+            dolfinx.fem.assemble_scalar(dolfinx.fem.form(expr)), op=MPI.SUM
+        )
 
     integral_omega = integrate(omega * ds)
     norm_omega_bnd = np.sqrt(integrate(omega**2 * ds))
@@ -59,7 +61,9 @@ def main() -> None:
     ok_omega = report.check_zero("∫ω na fronteira  (ω = F'(γ)η)", integral_omega)
 
     n_iter = cfg.consistency.n_iter
-    report.section(f"Teste de consistência: {n_iter} perturbações γ + tη, com t = {base:g}ⁿ")
+    report.section(
+        f"Teste de consistência: {n_iter} perturbações γ + tη, com t = {base:g}ⁿ"
+    )
     print("  y = erro entre a derivada numérica e ω")
     print(f"  {'n':>5}  {'t':>9}  {'y':>9}")
 
@@ -70,22 +74,30 @@ def main() -> None:
     t_vals = cfg.consistency.t_values()
     y_vals = np.empty(len(t_vals))
     g_top, g_bot = cfg.current.patterns[0]
-    err_form = dolfinx.fem.form((diff_fn - omega)**2 * ds)
+    err_form = dolfinx.fem.form((diff_fn - omega) ** 2 * ds)
 
     for k, t_n in enumerate(t_vals):
         gamma_n.x.array[:] = gamma.x.array + t_n * eta.x.array
         gamma_n.x.scatter_forward()
 
         u_n = ForwardSolver(
-            mesh=mesh, facet_tags=facet_tags, V=V,
-            gamma=gamma_n, config=cfg.solver, comm=comm,
-            g_top=g_top, g_bot=g_bot,
+            mesh=mesh,
+            facet_tags=facet_tags,
+            V=V,
+            gamma=gamma_n,
+            config=cfg.solver,
+            comm=comm,
+            g_top=g_top,
+            g_bot=g_bot,
         ).solve()
 
         diff_fn.x.array[:] = (u_n.x.array - u_gamma.x.array) / t_n
         diff_fn.x.scatter_forward()
 
-        y_vals[k] = np.sqrt(comm.allreduce(dolfinx.fem.assemble_scalar(err_form), op=MPI.SUM)) / norm_omega_bnd
+        y_vals[k] = (
+            np.sqrt(comm.allreduce(dolfinx.fem.assemble_scalar(err_form), op=MPI.SUM))
+            / norm_omega_bnd
+        )
         if k % PROGRESS_EVERY == 0 or k == n_iter - 1:
             print(f"  {k:>5}  {t_n:>9.1e}  {y_vals[k]:>9.1e}")
 
@@ -96,16 +108,28 @@ def main() -> None:
     window = fit_window(t_vals, idx_min)
     coeffs = np.polyfit(log_t[window], log_y[window], 1)
     slope = coeffs[0]
-    fit_line = np.polyval(coeffs, log_t[:window[-1] + 1])
+    fit_line = np.polyval(coeffs, log_t[: window[-1] + 1])
 
     report.section("Resultado do teste")
-    report.info("Menor erro", f"y = {y_vals[idx_min]:.1e}  (em n = {idx_min}, t = {t_vals[idx_min]:.1e})")
-    report.info("Queda do erro", f"de {y_vals[0]:.1e} para {y_vals[idx_min]:.1e}"
-                f"  ({np.log10(y_vals[0] / y_vals[idx_min]):.0f} ordens de grandeza)")
-    report.info("Ajuste da inclinação", f"n = {window[0]} a {window[-1]}  (t entre {t_vals[window[-1]]:.0e} e {t_vals[window[0]]:.0e})")
+    report.info(
+        "Menor erro",
+        f"y = {y_vals[idx_min]:.1e}  (em n = {idx_min}, t = {t_vals[idx_min]:.1e})",
+    )
+    report.info(
+        "Queda do erro",
+        f"de {y_vals[0]:.1e} para {y_vals[idx_min]:.1e}"
+        f"  ({np.log10(y_vals[0] / y_vals[idx_min]):.0f} ordens de grandeza)",
+    )
+    report.info(
+        "Ajuste da inclinação",
+        f"n = {window[0]} a {window[-1]}  (t entre {t_vals[window[-1]]:.0e} e {t_vals[window[0]]:.0e})",
+    )
     ok_slope = report.check(
-        "Inclinação (log y  ×  log t)", slope, SLOPE_RANGE[0] < slope < SLOPE_RANGE[1],
-        ideal="1", fmt=".3f",
+        "Inclinação (log y  ×  log t)",
+        slope,
+        SLOPE_RANGE[0] < slope < SLOPE_RANGE[1],
+        ideal="1",
+        fmt=".3f",
     )
 
     renderer = StaticRenderer(cfg, OUTPUTS_DIR)

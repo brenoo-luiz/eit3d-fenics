@@ -25,7 +25,10 @@ def main() -> None:
 
     report.title("PROBLEMA DIRETO  (encontrar o potencial u)")
     report.mesh(pipe)
-    report.info("Condutividade γ", f"{gam.gamma_in:g} na esfera (r = {gam.radius:g}), {gam.gamma_out:g} fora")
+    report.info(
+        "Condutividade γ",
+        f"{gam.gamma_in:g} na esfera (r = {gam.radius:g}), {gam.gamma_out:g} fora",
+    )
     report.info("Corrente g", f"{g_top:+g} no topo, {g_bot:+g} na base, 0 na lateral")
 
     gamma = pipe.build_gamma()
@@ -33,7 +36,9 @@ def main() -> None:
 
     mesh, _ = pipe.get_mesh()
     ds = ufl.Measure("ds", domain=mesh)
-    int_u = MPI.COMM_WORLD.allreduce(dolfinx.fem.assemble_scalar(dolfinx.fem.form(u_h * ds)), op=MPI.SUM)
+    int_u = MPI.COMM_WORLD.allreduce(
+        dolfinx.fem.assemble_scalar(dolfinx.fem.form(u_h * ds)), op=MPI.SUM
+    )
 
     report.section("Solução")
     report.info("Potencial u", f"de {u_h.x.array.min():.3f} a {u_h.x.array.max():.3f}")

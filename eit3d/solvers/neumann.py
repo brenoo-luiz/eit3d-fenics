@@ -13,15 +13,14 @@ logger = logging.getLogger(__name__)
 
 
 class NeumannSolver(BaseSolver):
-
     def __init__(
         self,
-        mesh  : dolfinx.mesh.Mesh,
-        V     : dolfinx.fem.FunctionSpace,
-        gamma : Coefficient,
-        g     : ufl.core.expr.Expr,
+        mesh: dolfinx.mesh.Mesh,
+        V: dolfinx.fem.FunctionSpace,
+        gamma: Coefficient,
+        g: ufl.core.expr.Expr,
         config: SolverConfig,
-        comm  : MPI.Comm = MPI.COMM_WORLD,
+        comm: MPI.Comm = MPI.COMM_WORLD,
     ) -> None:
         super().__init__(mesh, V, gamma, config, comm)
         self._g = g

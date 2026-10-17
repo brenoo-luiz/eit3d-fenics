@@ -4,8 +4,13 @@ import numpy as np
 import pytest
 
 from eit3d.config import (
-    MeshConfig, ConductivityConfig, EtaConfig,
-    CurrentConfig, SolverConfig, ConsistencyTestConfig, EITConfig,
+    ConductivityConfig,
+    ConsistencyTestConfig,
+    CurrentConfig,
+    EITConfig,
+    EtaConfig,
+    MeshConfig,
+    SolverConfig,
 )
 
 
@@ -118,8 +123,14 @@ class TestEITConfig:
 
     def test_summary_sections(self):
         s = EITConfig().summary()
-        for section in ("mesh:", "conductivity:", "eta:",
-                        "current:", "solver:", "consistency:"):
+        for section in (
+            "mesh:",
+            "conductivity:",
+            "eta:",
+            "current:",
+            "solver:",
+            "consistency:",
+        ):
             assert section in s
 
     def test_summary_reflects_config(self):
@@ -128,7 +139,6 @@ class TestEITConfig:
 
 
 class TestImmutability:
-
     def test_cannot_reassign_field(self):
         cfg = MeshConfig()
         with pytest.raises(dataclasses.FrozenInstanceError):
@@ -168,7 +178,6 @@ class TestImmutability:
 
 
 class TestMeshCachePath:
-
     @pytest.fixture(autouse=True)
     def _require_fenics(self):
         pytest.importorskip("dolfinx")
@@ -176,12 +185,14 @@ class TestMeshCachePath:
 
     def test_int_and_float_same_path(self, tmp_path):
         from eit3d.mesh.cylinder import mesh_cache_path
+
         a = mesh_cache_path(MeshConfig(radius=1), tmp_path)
         b = mesh_cache_path(MeshConfig(radius=1.0), tmp_path)
         assert a == b
 
     def test_different_config_different_path(self, tmp_path):
         from eit3d.mesh.cylinder import mesh_cache_path
+
         a = mesh_cache_path(MeshConfig(size_max=0.05), tmp_path)
         b = mesh_cache_path(MeshConfig(size_max=0.06), tmp_path)
         assert a != b

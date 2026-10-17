@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
-from typing import List, Union
+from typing import Union
 
 import dolfinx
 import dolfinx.fem.petsc
@@ -28,7 +28,6 @@ _HYPRE_3D_OPTIONS = {
 
 
 class BaseSolver(ABC):
-
     def __init__(
         self,
         mesh: dolfinx.mesh.Mesh,
@@ -48,7 +47,7 @@ class BaseSolver(ABC):
     def solve(self) -> dolfinx.fem.Function:
         return self.solve_all()[0]
 
-    def solve_all(self) -> List[dolfinx.fem.Function]:
+    def solve_all(self) -> list[dolfinx.fem.Function]:
         w = ufl.TrialFunction(self._V)
         v = ufl.TestFunction(self._V)
 
@@ -61,7 +60,8 @@ class BaseSolver(ABC):
             logger.info(
                 "%s: solution in [%.4f, %.4f]",
                 type(self).__name__,
-                float(u_h.x.array.min()), float(u_h.x.array.max()),
+                float(u_h.x.array.min()),
+                float(u_h.x.array.max()),
             )
         return solutions
 
@@ -73,17 +73,24 @@ class BaseSolver(ABC):
     def _linear_form(self, v: ufl.Argument) -> ufl.Form:
         """Right-hand side L(v). Implemented by each concrete solver."""
 
-    def _linear_forms(self, v: ufl.Argument) -> List[ufl.Form]:
+    def _linear_forms(self, v: ufl.Argument) -> list[ufl.Form]:
         return [self._linear_form(v)]
 
-    def _centered_flux(self, f: ufl.core.expr.Expr, ds_f: ufl.Measure, v: ufl.Argument) -> ufl.Form:
+    def _centered_flux(
+        self, f: ufl.core.expr.Expr, ds_f: ufl.Measure, v: ufl.Argument
+    ) -> ufl.Form:
         one = dolfinx.fem.Constant(self._mesh, PETSc.ScalarType(1.0))
         area = self._comm.allreduce(
-            dolfinx.fem.assemble_scalar(dolfinx.fem.form(one * self._ds_all)), op=MPI.SUM,
+            dolfinx.fem.assemble_scalar(dolfinx.fem.form(one * self._ds_all)),
+            op=MPI.SUM,
         )
-        mean = self._comm.allreduce(
-            dolfinx.fem.assemble_scalar(dolfinx.fem.form(f * ds_f)), op=MPI.SUM,
-        ) / area
+        mean = (
+            self._comm.allreduce(
+                dolfinx.fem.assemble_scalar(dolfinx.fem.form(f * ds_f)),
+                op=MPI.SUM,
+            )
+            / area
+        )
         c = dolfinx.fem.Constant(self._mesh, PETSc.ScalarType(mean))
         return f * v * ds_f - c * v * self._ds_all
 
@@ -98,9 +105,11 @@ class BaseSolver(ABC):
     def _assemble_and_solve_many(
         self,
         a_form: dolfinx.fem.Form,
-        L_forms: List[dolfinx.fem.Form],
-    ) -> List[dolfinx.fem.Function]:
-        with NeumannSystem(a_form, self._V, self._config, self._comm, owner=type(self).__name__) as system:
+        L_forms: list[dolfinx.fem.Form],
+    ) -> list[dolfinx.fem.Function]:
+        with NeumannSystem(
+            a_form, self._V, self._config, self._comm, owner=type(self).__name__
+        ) as system:
             return [system.solve(L_form) for L_form in L_forms]
 
     def _normalize_boundary_mean(self, u_h: dolfinx.fem.Function) -> None:
@@ -109,9 +118,12 @@ class BaseSolver(ABC):
             op=MPI.SUM,
         )
         area = self._comm.allreduce(
-            dolfinx.fem.assemble_scalar(dolfinx.fem.form(
-                dolfinx.fem.Constant(self._mesh, PETSc.ScalarType(1.0)) * self._ds_all
-            )),
+            dolfinx.fem.assemble_scalar(
+                dolfinx.fem.form(
+                    dolfinx.fem.Constant(self._mesh, PETSc.ScalarType(1.0))
+                    * self._ds_all
+                )
+            ),
             op=MPI.SUM,
         )
         u_h.x.array[:] -= integral / area
@@ -119,7 +131,6 @@ class BaseSolver(ABC):
 
 
 class NeumannSystem:
-
     def __init__(
         self,
         a_form: dolfinx.fem.Form,
@@ -145,7 +156,9 @@ class NeumannSystem:
         self._ksp.setOperators(self._A)
         self._ksp.setType(PETSc.KSP.Type.CG)
         self._ksp.getPC().setType(PETSc.PC.Type.HYPRE)
-        self._ksp.setTolerances(rtol=config.rtol, atol=config.atol, max_it=config.max_it)
+        self._ksp.setTolerances(
+            rtol=config.rtol, atol=config.atol, max_it=config.max_it
+        )
         self._set_amg_options(self._ksp)
 
         self._b = self._A.createVecRight()
@@ -164,14 +177,18 @@ class NeumannSystem:
         reason = self._ksp.getConvergedReason()
         if reason < 0:
             raise RuntimeError(f"{self._owner}: KSP diverged (reason={reason})")
-        logger.info("%s: converged in %d iterations", self._owner, self._ksp.getIterationNumber())
+        logger.info(
+            "%s: converged in %d iterations",
+            self._owner,
+            self._ksp.getIterationNumber(),
+        )
         return u_h
 
     def close(self) -> None:
         for obj in (self._ksp, self._ns, self._b, self._ns_vec, self._A):
             obj.destroy()
 
-    def __enter__(self) -> "NeumannSystem":
+    def __enter__(self) -> NeumannSystem:
         return self
 
     def __exit__(self, *exc) -> None:

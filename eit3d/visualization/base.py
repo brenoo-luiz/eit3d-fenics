@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Sequence
+from collections.abc import Sequence
 
 import numpy as np
 import pyvista
@@ -9,7 +9,6 @@ from eit3d.config import EITConfig
 
 
 class BaseRenderer:
-
     BG = "#1e1e2e"
     WINDOW_SIZE = (1000, 1000)
 
@@ -20,24 +19,31 @@ class BaseRenderer:
     def config(self) -> EITConfig:
         return self._config
 
-
     def _cylinder(self) -> pyvista.PolyData:
         return pyvista.Cylinder(
-            center=(0.0, 0.0, 0.0), direction=(0.0, 0.0, 1.0),
-            radius=self._config.mesh.radius, height=self._config.mesh.height,
-            resolution=100, capping=True,
+            center=(0.0, 0.0, 0.0),
+            direction=(0.0, 0.0, 1.0),
+            radius=self._config.mesh.radius,
+            height=self._config.mesh.height,
+            resolution=100,
+            capping=True,
         )
 
     @staticmethod
     def _sphere(center: Sequence[float], radius: float) -> pyvista.PolyData:
         return pyvista.Sphere(
-            radius=radius, center=tuple(float(c) for c in center),
-            theta_resolution=60, phi_resolution=60,
+            radius=radius,
+            center=tuple(float(c) for c in center),
+            theta_resolution=60,
+            phi_resolution=60,
         )
 
     @staticmethod
     def _section_circle(
-        center: Sequence[float], radius: float, axis: int, plane: float,
+        center: Sequence[float],
+        radius: float,
+        axis: int,
+        plane: float,
     ) -> pyvista.PolyData:
         dist = plane - float(center[axis])
         if abs(dist) >= radius:
@@ -58,9 +64,14 @@ class BaseRenderer:
     def _scalar_bar_args(title: str) -> dict:
         """Standard scalar bar layout for PyVista."""
         return dict(
-            title=title, title_font_size=20, label_font_size=15,
-            color="white", position_x=0.03, position_y=0.03,
-            width=0.42, height=0.06,
+            title=title,
+            title_font_size=20,
+            label_font_size=15,
+            color="white",
+            position_x=0.03,
+            position_y=0.03,
+            width=0.42,
+            height=0.06,
         )
 
     @staticmethod

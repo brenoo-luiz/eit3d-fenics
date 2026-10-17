@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional, Tuple
 
 import basix
 import dolfinx
@@ -18,12 +17,11 @@ logger = logging.getLogger(__name__)
 
 
 class EITPipeline:
-
     def __init__(
         self,
-        config    : EITConfig,
-        comm      : MPI.Comm = MPI.COMM_WORLD,
-        force_mesh: bool     = False,
+        config: EITConfig,
+        comm: MPI.Comm = MPI.COMM_WORLD,
+        force_mesh: bool = False,
     ) -> None:
         self._config = config
         self._comm = comm
@@ -36,15 +34,15 @@ class EITPipeline:
         )
         OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)
 
-        self._mesh       : Optional[dolfinx.mesh.Mesh] = None
-        self._facet_tags : Optional[dolfinx.mesh.MeshTags] = None
-        self._V          : Optional[dolfinx.fem.FunctionSpace] = None
+        self._mesh: dolfinx.mesh.Mesh | None = None
+        self._facet_tags: dolfinx.mesh.MeshTags | None = None
+        self._V: dolfinx.fem.FunctionSpace | None = None
 
     @property
     def config(self) -> EITConfig:
         return self._config
 
-    def get_mesh(self) -> Tuple[dolfinx.mesh.Mesh, dolfinx.mesh.MeshTags]:
+    def get_mesh(self) -> tuple[dolfinx.mesh.Mesh, dolfinx.mesh.MeshTags]:
         if self._mesh is None:
             self._mesh, self._facet_tags = self._cylinder.get()
         return self._mesh, self._facet_tags
@@ -52,9 +50,7 @@ class EITPipeline:
     def get_function_space(self) -> dolfinx.fem.FunctionSpace:
         if self._V is None:
             mesh, _ = self.get_mesh()
-            el = basix.ufl.element(
-                "Lagrange", "tetrahedron", degree=2, shape=()
-            )
+            el = basix.ufl.element("Lagrange", "tetrahedron", degree=2, shape=())
             self._V = dolfinx.fem.functionspace(mesh, el)
             logger.info("P2 space: %d DOFs", self._V.dofmap.index_map.size_global)
         return self._V
@@ -71,7 +67,7 @@ class EITPipeline:
     def solve_forward(
         self,
         pattern: int = 0,
-        gamma  : Optional[dolfinx.fem.Function] = None,
+        gamma: dolfinx.fem.Function | None = None,
     ) -> dolfinx.fem.Function:
         if gamma is None:
             gamma = self.build_gamma()
@@ -81,17 +77,21 @@ class EITPipeline:
         g_top, g_bot = self._config.current.patterns[pattern]
 
         return ForwardSolver(
-            mesh=mesh, facet_tags=facet_tags,
-            V=V, gamma=gamma,
-            config=self._config.solver, comm=self._comm,
-            g_top=g_top, g_bot=g_bot,
+            mesh=mesh,
+            facet_tags=facet_tags,
+            V=V,
+            gamma=gamma,
+            config=self._config.solver,
+            comm=self._comm,
+            g_top=g_top,
+            g_bot=g_bot,
         ).solve()
 
     def solve_derivative(
         self,
         u_gamma: dolfinx.fem.Function,
-        gamma  : Optional[dolfinx.fem.Function] = None,
-        eta    : Optional[dolfinx.fem.Function] = None,
+        gamma: dolfinx.fem.Function | None = None,
+        eta: dolfinx.fem.Function | None = None,
     ) -> dolfinx.fem.Function:
         """Solve eq. (1.13) for the directional derivative omega."""
         if gamma is None:
@@ -103,14 +103,20 @@ class EITPipeline:
         V = self.get_function_space()
 
         return DerivativeSolver(
-            mesh=mesh, V=V,
-            gamma=gamma, eta=eta, u_gamma=u_gamma,
-            config=self._config.solver, comm=self._comm,
+            mesh=mesh,
+            V=V,
+            gamma=gamma,
+            eta=eta,
+            u_gamma=u_gamma,
+            config=self._config.solver,
+            comm=self._comm,
         ).solve()
 
     def status(self) -> str:
         state = "available" if self._cylinder.is_cached() else "not generated"
-        return "\n".join([
-            self._config.summary(),
-            f"mesh cache:   {state}  ({self._cylinder.mesh_file.name})",
-        ])
+        return "\n".join(
+            [
+                self._config.summary(),
+                f"mesh cache:   {state}  ({self._cylinder.mesh_file.name})",
+            ]
+        )

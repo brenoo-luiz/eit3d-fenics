@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import List, Optional, Sequence
+from collections.abc import Sequence
 
 import dolfinx
 import dolfinx.fem
@@ -17,22 +17,21 @@ Expr = ufl.core.expr.Expr
 
 
 class MultiForwardSolver(BaseSolver):
-
     def __init__(
         self,
-        mesh    : dolfinx.mesh.Mesh,
-        V       : dolfinx.fem.FunctionSpace,
-        gamma   : Coefficient,
+        mesh: dolfinx.mesh.Mesh,
+        V: dolfinx.fem.FunctionSpace,
+        gamma: Coefficient,
         currents: Sequence[Expr],
-        ds_g    : ufl.Measure,
-        config  : SolverConfig,
-        comm    : MPI.Comm = MPI.COMM_WORLD,
+        ds_g: ufl.Measure,
+        config: SolverConfig,
+        comm: MPI.Comm = MPI.COMM_WORLD,
     ) -> None:
         super().__init__(mesh, V, gamma, config, comm)
         self._currents = list(currents)
         self._ds_g = ds_g
 
-    def _linear_forms(self, v: ufl.Argument) -> List[ufl.Form]:
+    def _linear_forms(self, v: ufl.Argument) -> list[ufl.Form]:
         return [self._centered_flux(g, self._ds_g, v) for g in self._currents]
 
     def _linear_form(self, v: ufl.Argument) -> ufl.Form:
@@ -40,22 +39,21 @@ class MultiForwardSolver(BaseSolver):
 
 
 class MultiDerivativeSolver(BaseSolver):
-
     def __init__(
         self,
-        mesh    : dolfinx.mesh.Mesh,
-        V       : dolfinx.fem.FunctionSpace,
-        gamma   : Coefficient,
-        eta     : dolfinx.fem.Function,
+        mesh: dolfinx.mesh.Mesh,
+        V: dolfinx.fem.FunctionSpace,
+        gamma: Coefficient,
+        eta: dolfinx.fem.Function,
         u_gammas: Sequence[dolfinx.fem.Function],
-        config  : SolverConfig,
-        comm    : MPI.Comm = MPI.COMM_WORLD,
+        config: SolverConfig,
+        comm: MPI.Comm = MPI.COMM_WORLD,
     ) -> None:
         super().__init__(mesh, V, gamma, config, comm)
         self._eta = eta
         self._u_gammas = list(u_gammas)
 
-    def _linear_forms(self, v: ufl.Argument) -> List[ufl.Form]:
+    def _linear_forms(self, v: ufl.Argument) -> list[ufl.Form]:
         return [
             -ufl.inner(self._eta * ufl.grad(u), ufl.grad(v)) * ufl.dx
             for u in self._u_gammas
@@ -66,17 +64,16 @@ class MultiDerivativeSolver(BaseSolver):
 
 
 class MultiAdjointSolver(BaseSolver):
-
     def __init__(
         self,
-        mesh    : dolfinx.mesh.Mesh,
-        V       : dolfinx.fem.FunctionSpace,
-        gamma   : Coefficient,
+        mesh: dolfinx.mesh.Mesh,
+        V: dolfinx.fem.FunctionSpace,
+        gamma: Coefficient,
         u_gammas: Sequence[dolfinx.fem.Function],
-        hs      : Sequence[Expr],
-        ds_h    : ufl.Measure,
-        config  : SolverConfig,
-        comm    : MPI.Comm = MPI.COMM_WORLD,
+        hs: Sequence[Expr],
+        ds_h: ufl.Measure,
+        config: SolverConfig,
+        comm: MPI.Comm = MPI.COMM_WORLD,
     ) -> None:
         if len(u_gammas) != len(hs):
             raise ValueError("u_gammas and hs must have the same length")
@@ -84,10 +81,10 @@ class MultiAdjointSolver(BaseSolver):
         self._u_gammas = list(u_gammas)
         self._hs = list(hs)
         self._ds_h = ds_h
-        self._psis     : Optional[List[dolfinx.fem.Function]] = None
+        self._psis: list[dolfinx.fem.Function] | None = None
 
     @property
-    def psis(self) -> List[dolfinx.fem.Function]:
+    def psis(self) -> list[dolfinx.fem.Function]:
         if self._psis is None:
             raise RuntimeError("psis are only available after solve()")
         return self._psis
@@ -97,7 +94,10 @@ class MultiAdjointSolver(BaseSolver):
 
         W = dolfinx.fem.functionspace(self._mesh, ("DG", 2))
         expr = dolfinx.fem.Expression(
-            -sum(ufl.inner(ufl.grad(u), ufl.grad(psi)) for u, psi in zip(self._u_gammas, self._psis)),
+            -sum(
+                ufl.inner(ufl.grad(u), ufl.grad(psi))
+                for u, psi in zip(self._u_gammas, self._psis)
+            ),
             W.element.interpolation_points,
         )
         adj = dolfinx.fem.Function(W)
@@ -105,7 +105,7 @@ class MultiAdjointSolver(BaseSolver):
         adj.x.scatter_forward()
         return adj
 
-    def _linear_forms(self, v: ufl.Argument) -> List[ufl.Form]:
+    def _linear_forms(self, v: ufl.Argument) -> list[ufl.Form]:
         return [self._centered_flux(h, self._ds_h, v) for h in self._hs]
 
     def _linear_form(self, v: ufl.Argument) -> ufl.Form:

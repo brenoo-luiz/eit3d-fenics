@@ -13,16 +13,15 @@ logger = logging.getLogger(__name__)
 
 
 class DerivativeSolver(BaseSolver):
-
     def __init__(
         self,
-        mesh   : dolfinx.mesh.Mesh,
-        V      : dolfinx.fem.FunctionSpace,
-        gamma  : Coefficient,
-        eta    : dolfinx.fem.Function,
+        mesh: dolfinx.mesh.Mesh,
+        V: dolfinx.fem.FunctionSpace,
+        gamma: Coefficient,
+        eta: dolfinx.fem.Function,
         u_gamma: dolfinx.fem.Function,
-        config : SolverConfig,
-        comm   : MPI.Comm = MPI.COMM_WORLD,
+        config: SolverConfig,
+        comm: MPI.Comm = MPI.COMM_WORLD,
     ) -> None:
         super().__init__(mesh, V, gamma, config, comm)
         self._eta = eta

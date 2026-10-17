@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 import dolfinx
 import dolfinx.fem
@@ -15,21 +14,20 @@ logger = logging.getLogger(__name__)
 
 
 class AdjointSolver(BaseSolver):
-
     def __init__(
         self,
-        mesh   : dolfinx.mesh.Mesh,
-        V      : dolfinx.fem.FunctionSpace,
-        gamma  : Coefficient,
+        mesh: dolfinx.mesh.Mesh,
+        V: dolfinx.fem.FunctionSpace,
+        gamma: Coefficient,
         u_gamma: dolfinx.fem.Function,
-        h      : ufl.core.expr.Expr,
-        config : SolverConfig,
-        comm   : MPI.Comm = MPI.COMM_WORLD,
+        h: ufl.core.expr.Expr,
+        config: SolverConfig,
+        comm: MPI.Comm = MPI.COMM_WORLD,
     ) -> None:
         super().__init__(mesh, V, gamma, config, comm)
         self._u_gamma = u_gamma
         self._h = self._center_on_boundary(h)
-        self._psi     : Optional[dolfinx.fem.Function] = None
+        self._psi: dolfinx.fem.Function | None = None
 
     @property
     def psi(self) -> dolfinx.fem.Function:
@@ -51,7 +49,8 @@ class AdjointSolver(BaseSolver):
 
         logger.info(
             "F'(gamma)* h in [%.4f, %.4f]",
-            float(adj.x.array.min()), float(adj.x.array.max()),
+            float(adj.x.array.min()),
+            float(adj.x.array.max()),
         )
         return adj
 
@@ -61,10 +60,14 @@ class AdjointSolver(BaseSolver):
     def _center_on_boundary(self, h: ufl.core.expr.Expr) -> ufl.core.expr.Expr:
         one = dolfinx.fem.Constant(self._mesh, dolfinx.default_scalar_type(1.0))
         integral = self._comm.allreduce(
-            dolfinx.fem.assemble_scalar(dolfinx.fem.form(h * self._ds_all)), op=MPI.SUM,
+            dolfinx.fem.assemble_scalar(dolfinx.fem.form(h * self._ds_all)),
+            op=MPI.SUM,
         )
         area = self._comm.allreduce(
-            dolfinx.fem.assemble_scalar(dolfinx.fem.form(one * self._ds_all)), op=MPI.SUM,
+            dolfinx.fem.assemble_scalar(dolfinx.fem.form(one * self._ds_all)),
+            op=MPI.SUM,
         )
         logger.info("h boundary mean removed: %.3e", integral / area)
-        return h - dolfinx.fem.Constant(self._mesh, dolfinx.default_scalar_type(integral / area))
+        return h - dolfinx.fem.Constant(
+            self._mesh, dolfinx.default_scalar_type(integral / area)
+        )

@@ -21,7 +21,8 @@ def _volume_where(field_fn, value) -> float:
     indicator = dolfinx.fem.Function(field_fn.function_space)
     indicator.x.array[:] = np.isclose(field_fn.x.array, value).astype(float)
     return MPI.COMM_WORLD.allreduce(
-        dolfinx.fem.assemble_scalar(dolfinx.fem.form(indicator * ufl.dx)), op=MPI.SUM,
+        dolfinx.fem.assemble_scalar(dolfinx.fem.form(indicator * ufl.dx)),
+        op=MPI.SUM,
     )
 
 

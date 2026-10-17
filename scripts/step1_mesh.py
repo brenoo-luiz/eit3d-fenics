@@ -20,12 +20,16 @@ def main() -> None:
 
     report.title("MALHA DO CILINDRO")
     report.info("Cilindro", f"raio {cfg.mesh.radius:g}, altura {cfg.mesh.height:g}")
-    report.info("Tamanho dos elementos", f"entre {cfg.mesh.size_min:g} e {cfg.mesh.size_max:g}")
+    report.info(
+        "Tamanho dos elementos", f"entre {cfg.mesh.size_min:g} e {cfg.mesh.size_max:g}"
+    )
     report.mesh(pipe)
 
     mesh, _ = pipe.get_mesh()
     topo, ct, geo = dolfinx.plot.vtk_mesh(mesh, mesh.topology.dim - 1)
-    out = StaticRenderer(cfg, OUTPUTS_DIR).render_mesh(pyvista.UnstructuredGrid(topo, ct, geo))
+    out = StaticRenderer(cfg, OUTPUTS_DIR).render_mesh(
+        pyvista.UnstructuredGrid(topo, ct, geo)
+    )
 
     report.files([out])
 

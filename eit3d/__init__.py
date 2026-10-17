@@ -13,5 +13,6 @@ __all__ = ["EITConfig", "EITPipeline"]
 def __getattr__(name: str):
     if name == "EITPipeline":
         from eit3d.pipeline.eit_pipeline import EITPipeline
+
         return EITPipeline
     raise AttributeError(f"module 'eit3d' has no attribute {name!r}")

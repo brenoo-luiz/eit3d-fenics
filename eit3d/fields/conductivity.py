@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
-from typing import Sequence
+from collections.abc import Sequence
 
 import dolfinx
 import dolfinx.fem
@@ -14,12 +14,13 @@ from eit3d.config import ConductivityConfig, EtaConfig
 logger = logging.getLogger(__name__)
 
 
-def sphere_indicator(points: np.ndarray, center: np.ndarray, radius: float) -> np.ndarray:
-    return np.sum((points - center) ** 2, axis=1) < radius ** 2
+def sphere_indicator(
+    points: np.ndarray, center: np.ndarray, radius: float
+) -> np.ndarray:
+    return np.sum((points - center) ** 2, axis=1) < radius**2
 
 
 class PiecewiseSphereField(ABC):
-
     def __init__(self, mesh: dolfinx.mesh.Mesh) -> None:
         self._mesh = mesh
         self._space = dolfinx.fem.functionspace(mesh, ("DG", 0))
@@ -69,8 +70,12 @@ class PiecewiseSphereField(ABC):
 
         logger.info(
             "%s: %d of %d cells inside %d sphere(s) set to %.2f, rest %.2f",
-            self.name, int(inside.sum()), len(cells), len(self.centers),
-            self.value_in, self.value_out,
+            self.name,
+            int(inside.sum()),
+            len(cells),
+            len(self.centers),
+            self.value_in,
+            self.value_out,
         )
         return field_fn
 
@@ -86,7 +91,6 @@ class PiecewiseSphereField(ABC):
 
 
 class ConductivityField(PiecewiseSphereField):
-
     def __init__(self, mesh: dolfinx.mesh.Mesh, config: ConductivityConfig) -> None:
         super().__init__(mesh)
         self._config = config
@@ -113,7 +117,6 @@ class ConductivityField(PiecewiseSphereField):
 
 
 class DirectionalField(PiecewiseSphereField):
-
     def __init__(self, mesh: dolfinx.mesh.Mesh, config: EtaConfig) -> None:
         super().__init__(mesh)
         self._config = config
@@ -138,16 +141,16 @@ class DirectionalField(PiecewiseSphereField):
     def value_out(self) -> float:
         return self._config.eta_out
 
-class SpheresField(PiecewiseSphereField):
 
+class SpheresField(PiecewiseSphereField):
     def __init__(
         self,
-        mesh     : dolfinx.mesh.Mesh,
-        centers  : Sequence[Sequence[float]],
-        radius   : float,
-        value_in : float,
+        mesh: dolfinx.mesh.Mesh,
+        centers: Sequence[Sequence[float]],
+        radius: float,
+        value_in: float,
         value_out: float,
-        name     : str = "field",
+        name: str = "field",
     ) -> None:
         if radius <= 0:
             raise ValueError("radius must be positive")
