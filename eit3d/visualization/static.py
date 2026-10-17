@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import itertools
 import logging
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import ClassVar
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -93,7 +95,11 @@ class StaticRenderer(BaseRenderer):
     BG = "white"
     WINDOW_SIZE = (1100, 1100)
     DPI = 300
-    CAMERA = [(5.2, -6.6, 2.6), (0.0, 0.0, 0.0), (0.0, 0.0, 1.0)]
+    CAMERA: ClassVar[list[tuple[float, float, float]]] = [
+        (5.2, -6.6, 2.6),
+        (0.0, 0.0, 0.0),
+        (0.0, 0.0, 1.0),
+    ]
 
     def __init__(self, config: EITConfig, output_dir: Path = OUTPUTS_DIR) -> None:
         super().__init__(config)
@@ -552,8 +558,10 @@ class StaticRenderer(BaseRenderer):
         n = len(eta.centers)
         centers = ", ".join(self._fmt_point(c) for c in eta.centers)
         return [
-            f"Condutividade γ\nesfera r={self._fmt(gam.radius)}, "
-            f"γ={self._fmt(gam.gamma_in)} dentro e {self._fmt(gam.gamma_out)} fora",
+            (
+                f"Condutividade γ\nesfera r={self._fmt(gam.radius)}, "
+                f"γ={self._fmt(gam.gamma_in)} dentro e {self._fmt(gam.gamma_out)} fora"
+            ),
             f"Direção η\n{n} esfera{'s' if n != 1 else ''} r={self._fmt(eta.radius)} em {centers}",
         ]
 
@@ -609,7 +617,7 @@ class StaticRenderer(BaseRenderer):
         heights = [(np.log10(v) - low) / (high - low) for v in values]
         order = np.argsort(heights)
         placed = list(heights)
-        for prev, cur in zip(order[:-1], order[1:]):
+        for prev, cur in itertools.pairwise(order):
             placed[cur] = max(placed[cur], placed[prev] + gap)
         return placed
 
@@ -649,13 +657,13 @@ class StaticRenderer(BaseRenderer):
             fontsize=10,
             color=INK,
             fontweight="bold",
-            arrowprops=dict(
-                arrowstyle="-|>",
-                color=INK,
-                linewidth=0.9,
-                connectionstyle=f"arc3,rad={rad}",
-                shrinkB=4,
-            ),
+            arrowprops={
+                "arrowstyle": "-|>",
+                "color": INK,
+                "linewidth": 0.9,
+                "connectionstyle": f"arc3,rad={rad}",
+                "shrinkB": 4,
+            },
         )
 
     @staticmethod
@@ -819,7 +827,7 @@ class StaticRenderer(BaseRenderer):
 
     @staticmethod
     def _pad_to_ratio(img: np.ndarray, ratio: float) -> np.ndarray:
-        missing = int(round(ratio * img.shape[1])) - img.shape[0]
+        missing = round(ratio * img.shape[1]) - img.shape[0]
         if missing <= 0:
             return img
         pad = np.full((missing, img.shape[1], img.shape[2]), 255, dtype=img.dtype)

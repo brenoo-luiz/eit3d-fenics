@@ -83,7 +83,7 @@ def test_consistency_figure(tmp_path):
 def test_static_figures(tmp_path, mesh_data):
     import dolfinx.plot
 
-    mesh, _, V = mesh_data
+    _mesh, _, V = mesh_data
     topo, ct, geo = dolfinx.plot.vtk_mesh(V)
     grid = pyvista.UnstructuredGrid(topo, ct, geo)
     grid["u"] = V.tabulate_dof_coordinates()[:, 2]  # u = z

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
-from typing import Union
+from typing import Self
 
 import dolfinx
 import dolfinx.fem.petsc
@@ -14,7 +14,7 @@ from eit3d.config import SolverConfig
 
 logger = logging.getLogger(__name__)
 
-Coefficient = Union[dolfinx.fem.Function, dolfinx.fem.Constant]
+Coefficient = dolfinx.fem.Function | dolfinx.fem.Constant
 
 _OPTIONS_PREFIX = "eit3d_"
 _HYPRE_3D_OPTIONS = {
@@ -188,7 +188,7 @@ class NeumannSystem:
         for obj in (self._ksp, self._ns, self._b, self._ns_vec, self._A):
             obj.destroy()
 
-    def __enter__(self) -> NeumannSystem:
+    def __enter__(self) -> Self:
         return self
 
     def __exit__(self, *exc) -> None:

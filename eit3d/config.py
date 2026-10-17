@@ -145,14 +145,14 @@ class EITConfig:
     def summary(self) -> str:
         return "\n".join(
             [
-                f"mesh:         radius={self.mesh.radius}  height={self.mesh.height}"
-                f"  h=[{self.mesh.size_min}, {self.mesh.size_max}]",
-                f"conductivity: gamma in [{self.conductivity.gamma_min}, "
-                f"{self.conductivity.gamma_max}]  sphere r={self.conductivity.radius}",
+                (f"mesh:         radius={self.mesh.radius}  height={self.mesh.height}"
+                f"  h=[{self.mesh.size_min}, {self.mesh.size_max}]"),
+                (f"conductivity: gamma in [{self.conductivity.gamma_min}, "
+                f"{self.conductivity.gamma_max}]  sphere r={self.conductivity.radius}"),
                 f"eta:          {len(self.eta.centers)} sphere(s)  r={self.eta.radius}",
                 f"current:      {len(self.current.patterns)} pattern(s)",
-                f"solver:       CG+HYPRE  rtol={self.solver.rtol}"
-                f"  max_it={self.solver.max_it}",
+                (f"solver:       CG+HYPRE  rtol={self.solver.rtol}"
+                f"  max_it={self.solver.max_it}"),
                 f"consistency:  {self.consistency.n_iter} iter  base={self.consistency.base}",
             ]
         )

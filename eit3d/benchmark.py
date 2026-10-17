@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import dolfinx
 import dolfinx.fem
@@ -25,8 +25,12 @@ class TwoSpheres:
     value: float = 10.0
     background: float = 1.0
     ks: tuple[int, ...] = tuple(range(1, 9))
-    fine_mesh: MeshConfig = MeshConfig(size_max=0.05, size_min=0.02)
-    coarse_mesh: MeshConfig = MeshConfig(size_max=0.1, size_min=0.05)
+    fine_mesh: MeshConfig = field(
+        default_factory=lambda: MeshConfig(size_max=0.05, size_min=0.02)
+    )
+    coarse_mesh: MeshConfig = field(
+        default_factory=lambda: MeshConfig(size_max=0.1, size_min=0.05)
+    )
 
     @property
     def spheres(self) -> list[tuple[Point, float]]:

@@ -42,16 +42,16 @@ def setup(mesh_data):
     w_list = MultiDerivativeSolver(
         mesh, V, gamma, sigma, u_list, SOLVER, COMM
     ).solve_all()
-    return dict(
-        mesh=mesh,
-        V=V,
-        gamma=gamma,
-        sigma=sigma,
-        ds_lat=ds_lat,
-        currents=currents,
-        u_list=u_list,
-        w_list=w_list,
-    )
+    return {
+        "mesh": mesh,
+        "V": V,
+        "gamma": gamma,
+        "sigma": sigma,
+        "ds_lat": ds_lat,
+        "currents": currents,
+        "u_list": u_list,
+        "w_list": w_list,
+    }
 
 
 def test_currents_are_compatible(setup):

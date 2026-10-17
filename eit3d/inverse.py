@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field, replace
+from typing import Self
 
 import dolfinx
 import dolfinx.fem
@@ -400,7 +401,7 @@ class LinearizedOperator:
     def close(self) -> None:
         self._system.close()
 
-    def __enter__(self) -> LinearizedOperator:
+    def __enter__(self) -> Self:
         return self
 
     def __exit__(self, *exc) -> None:

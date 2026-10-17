@@ -63,16 +63,16 @@ class BaseRenderer:
     @staticmethod
     def _scalar_bar_args(title: str) -> dict:
         """Standard scalar bar layout for PyVista."""
-        return dict(
-            title=title,
-            title_font_size=20,
-            label_font_size=15,
-            color="white",
-            position_x=0.03,
-            position_y=0.03,
-            width=0.42,
-            height=0.06,
-        )
+        return {
+            "title": title,
+            "title_font_size": 20,
+            "label_font_size": 15,
+            "color": "white",
+            "position_x": 0.03,
+            "position_y": 0.03,
+            "width": 0.42,
+            "height": 0.06,
+        }
 
     @staticmethod
     def _fmt(value: float) -> str:

@@ -91,15 +91,15 @@ def problem(mesh_data, fine):
         COMM,
     )
     gamma0 = SpheresField(mesh, (), 0.25, 1.0, 1.0).build()
-    return dict(
-        mesh=mesh,
-        tags=tags,
-        V=V,
-        method=method,
-        newton=newton,
-        gamma0=gamma0,
-        truth=truth,
-    )
+    return {
+        "mesh": mesh,
+        "tags": tags,
+        "V": V,
+        "method": method,
+        "newton": newton,
+        "gamma0": gamma0,
+        "truth": truth,
+    }
 
 
 def test_spheres_field_values(mesh_data):
@@ -299,10 +299,10 @@ def test_newton_inner_loop_respects_limit(problem):
 def test_newton_invalid_arguments(problem):
     newton, gamma0 = problem["newton"], problem["gamma0"]
     for kwargs in (
-        dict(step=-1.0),
-        dict(step=1.0, mu=1.0),
-        dict(step=1.0, mu=0.0),
-        dict(step=1.0, n_inner=0),
+        {"step": -1.0},
+        {"step": 1.0, "mu": 1.0},
+        {"step": 1.0, "mu": 0.0},
+        {"step": 1.0, "n_inner": 0},
     ):
         with pytest.raises(ValueError):
             newton.run(gamma0, n_outer=1, **kwargs)
