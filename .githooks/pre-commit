@@ -1,12 +1,20 @@
 #!/usr/bin/env bash
-# Runs the test suite before each commit and blocks it if any test fails.
+# Runs lint and the test suite before each commit and blocks it on failure.
 
 if git diff --cached --quiet -- '*.py' environment.yml; then
     exit 0
 fi
 
-if ! command -v pytest > /dev/null; then
-    echo "pre-commit: pytest não encontrado. Ative o ambiente (conda activate eit3d-env) e tente de novo."
+for tool in ruff pytest; do
+    if ! command -v "$tool" > /dev/null; then
+        echo "pre-commit: $tool não encontrado. Ative o ambiente (conda activate eit3d-env) e tente de novo."
+        exit 1
+    fi
+done
+
+echo "pre-commit: verificando formatação..."
+if ! ruff format --check . || ! ruff check .; then
+    echo "pre-commit: código fora do padrão, rode 'ruff format .' e 'ruff check --fix .'. Commit bloqueado."
     exit 1
 fi
 
