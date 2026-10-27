@@ -127,3 +127,91 @@ def test_inclusions_figure(tmp_path):
         "inclusions.png",
     )
     assert out.exists() and out.stat().st_size > 0
+
+
+def _sphere_field(mesh, center, value):
+    from eit3d.fields import SpheresField
+
+    return SpheresField(mesh, (center,), 0.4, value, 1.0, name="gamma").build()
+
+
+@pytest.fixture
+def saved_grid(tmp_path, mesh_data):
+    from eit3d.visualization.grid import TRUE_FIELD, save_conductivity
+
+    mesh, _, _ = mesh_data
+    fields = {
+        TRUE_FIELD: _sphere_field(mesh, (0.3, 0.0, 0.3), 10.0),
+        "k5": _sphere_field(mesh, (0.3, 0.0, 0.3), 1.5),
+        "k10": _sphere_field(mesh, (0.3, 0.0, 0.3), 2.0),
+    }
+    path = save_conductivity(fields, tmp_path / "sub" / "gamma.vtu")
+    return pyvista.read(path)
+
+
+def test_conductivity_grid_follows_cell_order(mesh_data):
+    import dolfinx.fem
+
+    from eit3d.visualization.grid import conductivity_grid
+
+    mesh, _, _ = mesh_data
+    x = dolfinx.fem.Function(dolfinx.fem.functionspace(mesh, ("DG", 0)))
+    x.interpolate(lambda p: p[0])
+    grid = conductivity_grid({"x": x})
+    assert np.allclose(grid.cell_data["x"], grid.cell_centers().points[:, 0])
+
+
+def test_conductivity_grid_rejects_non_dg0(mesh_data):
+    import dolfinx.fem
+
+    from eit3d.visualization.grid import conductivity_grid
+
+    _, _, V = mesh_data
+    with pytest.raises(ValueError, match="DG0"):
+        conductivity_grid({"u": dolfinx.fem.Function(V)})
+
+
+def test_saved_reconstruction_keeps_fields_in_order(saved_grid):
+    from eit3d.visualization.grid import TRUE_FIELD, iteration_fields
+
+    assert TRUE_FIELD in saved_grid.cell_data
+    assert iteration_fields(saved_grid) == ["k5", "k10"]
+    assert np.isclose(saved_grid.cell_data[TRUE_FIELD].max(), 10.0)
+
+
+def test_viewer_needs_a_reconstruction(saved_grid):
+    from eit3d.visualization import InversionViewer
+
+    only_true = saved_grid.copy()
+    for name in ("k5", "k10"):
+        only_true.cell_data.remove(name)
+    with pytest.raises(ValueError, match="reconstructed"):
+        InversionViewer(EITConfig(), only_true, [])
+
+
+def test_viewer_level_and_isosurface(saved_grid):
+    from eit3d.visualization import InversionViewer
+
+    viewer = InversionViewer(EITConfig(), saved_grid, [((0.3, 0.0, 0.3), 0.4)])
+    values = viewer._points.point_data["k10"]
+    low, high = np.median(values), values.max()
+    assert np.isclose(viewer.level("k10", 0.0), low)
+    assert np.isclose(viewer.level("k10", 1.0), high)
+    surface = viewer.isosurface("k10", 0.5)
+    assert surface.n_points > 0
+    assert np.linalg.norm(surface.center - np.array([0.3, 0.0, 0.3])) < 0.2
+
+
+@requires_rendering
+def test_viewer_window_and_sliders(saved_grid):
+    from eit3d.visualization import InversionViewer
+
+    viewer = InversionViewer(EITConfig(), saved_grid, [((0.3, 0.0, 0.3), 0.4)])
+    pl = viewer.plotter(off_screen=True)
+    assert viewer._index == 1
+    viewer._on_iteration(0.2)
+    assert viewer._index == 0
+    viewer._on_level(0.8)
+    assert np.isclose(viewer._fraction, 0.8)
+    assert "iso" in pl.renderers[1].actors
+    pl.close()
