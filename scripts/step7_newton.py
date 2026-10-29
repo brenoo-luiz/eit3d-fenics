@@ -11,6 +11,7 @@ from eit3d.benchmark import TwoSpheres, boundary_norm, transfer_all
 from eit3d.config import OUTPUTS_DIR
 from eit3d.currents import lateral_measure
 from eit3d.inverse import InexactNewton
+from eit3d.visualization.grid import TRUE_FIELD, save_conductivity
 from eit3d.visualization.static import StaticRenderer
 
 MU = 0.9
@@ -212,6 +213,8 @@ def main() -> None:
                 clims=clims,
             )
         )
+        saved = {TRUE_FIELD: gamma_true} | {f"k{k}": g for k, g in snapshots}
+        outputs.append(save_conductivity(saved, OUTPUTS_DIR / f"step7_gamma_{tag}.vtu"))
 
     report.result(
         ok_transfer and ok_step and ok_residual,

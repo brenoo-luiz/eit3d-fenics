@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Sequence
+from typing import ClassVar
 
 import numpy as np
 import pyvista
@@ -86,14 +87,29 @@ class InteractiveRenderer(BaseRenderer):
 
 
 class InversionViewer(BaseRenderer):
-    BG = "white"
-    INK = "#222222"
-    FRAME = "#9a9a9a"
-    TRUE_COLOR = "#d62728"
-    BODY_COLOR = "#dfe7ef"
-    CMAP = "viridis"
+    CMAP = "turbo"
     LEVEL = 0.5
-    WINDOW = (1600, 800)
+    WINDOW = (1800, 700)
+    PLANE = 0.0
+    ZOOM = 0.75
+    BAR: ClassVar[dict[str, object]] = {
+        "title": "condutividade",
+        "color": "white",
+        "vertical": True,
+        "position_x": 0.85,
+        "position_y": 0.2,
+        "width": 0.05,
+        "height": 0.6,
+        "title_font_size": 16,
+        "label_font_size": 14,
+        "fmt": "%.2f",
+    }
+    OFFSET = 0.01
+    SLIDER: ClassVar[dict[str, float]] = {
+        "tube_width": 0.004,
+        "slider_width": 0.015,
+        "title_height": 0.025,
+    }
 
     def __init__(
         self,
@@ -105,6 +121,7 @@ class InversionViewer(BaseRenderer):
         self._names = iteration_fields(grid)
         if not self._names:
             raise ValueError("the grid has no reconstructed field")
+        self._grid = grid
         self._points = grid.cell_data_to_point_data()
         self._spheres = list(spheres)
         values = np.concatenate([grid.cell_data[n] for n in self._names])
@@ -126,34 +143,31 @@ class InversionViewer(BaseRenderer):
     def isosurface(self, name: str, fraction: float) -> pyvista.PolyData:
         return self._points.contour([self.level(name, fraction)], scalars=name)
 
+    def section(self, name: str) -> pyvista.DataSet:
+        grid = self._grid.copy()
+        grid.set_active_scalars(name, preference="cell")
+        return grid.clip(normal="y", origin=(0.0, self.PLANE, 0.0), invert=False)
+
     def plotter(self, off_screen: bool = False) -> pyvista.Plotter:
         pl = pyvista.Plotter(
-            shape=(1, 2), window_size=self.WINDOW, off_screen=off_screen, border=False
+            shape=(1, 3), window_size=self.WINDOW, off_screen=off_screen
         )
         self._plotter = pl
-        pl.set_background(self.BG)
 
         pl.subplot(0, 0)
+        pl.add_text("Condutividade verdadeira", font_size=12, color="white")
         self._body(pl)
         for center, radius in self._spheres:
             pl.add_mesh(
                 self._sphere(center, radius),
-                color=self.TRUE_COLOR,
+                color="red",
+                opacity=0.95,
+                lighting=True,
                 smooth_shading=True,
-                specular=0.3,
             )
-        pl.add_text("Verdadeira", font_size=11, color=self.INK)
 
         pl.subplot(0, 1)
         self._body(pl)
-        for center, radius in self._spheres:
-            pl.add_mesh(
-                self._sphere(center, radius),
-                color=self.TRUE_COLOR,
-                opacity=0.15,
-                smooth_shading=True,
-            )
-        self._draw()
         if len(self._names) > 1:
             pl.add_slider_widget(
                 self._on_iteration,
@@ -161,27 +175,48 @@ class InversionViewer(BaseRenderer):
                 value=self._ks[self._index],
                 title="iteração k",
                 fmt="%.0f",
-                pointa=(0.1, 0.1),
-                pointb=(0.45, 0.1),
+                pointa=(0.1, 0.88),
+                pointb=(0.9, 0.88),
                 style="modern",
-                color=self.INK,
+                color="white",
+                **self.SLIDER,
             )
         pl.add_slider_widget(
             self._on_level,
             (0.05, 0.95),
             value=self._fraction,
-            title="nível",
+            title="nível da isosuperfície",
             fmt="%.2f",
-            pointa=(0.55, 0.1),
-            pointb=(0.9, 0.1),
+            pointa=(0.55, 0.08),
+            pointb=(0.95, 0.08),
             style="modern",
-            color=self.INK,
+            color="white",
+            **self.SLIDER,
         )
 
+        pl.subplot(0, 2)
+        pl.add_text(
+            f"Corte em y = {self._fmt(self.PLANE)}", font_size=12, color="white"
+        )
+        for center, radius in self._spheres:
+            circle = self._section_circle(center, radius, axis=1, plane=self.PLANE)
+            if circle.n_points:
+                circle.translate((0.0, -self.OFFSET, 0.0), inplace=True)
+                pl.add_mesh(circle, color="white", line_width=3)
+        self._draw()
+
+        for col in range(3):
+            pl.subplot(0, col)
+            pl.set_background(self.BG)
+            pl.add_axes()
+
         pl.link_views()
-        pl.enable_parallel_projection()
-        pl.camera_position = [(1.0, -1.0, 0.6), (0.0, 0.0, 0.0), (0.0, 0.0, 1.0)]
-        pl.reset_camera()
+        pl.camera_position = [
+            (0.0, -self._camera_distance(), 0.0),
+            (0.0, 0.0, 0.0),
+            (0.0, 0.0, 1.0),
+        ]
+        pl.camera.zoom(self.ZOOM)
         return pl
 
     def show(self) -> None:
@@ -189,20 +224,7 @@ class InversionViewer(BaseRenderer):
         self.plotter().show()
 
     def _body(self, pl: pyvista.Plotter) -> None:
-        pl.add_mesh(
-            self._cylinder(), color=self.BODY_COLOR, opacity=0.12, smooth_shading=True
-        )
-        mesh = self._config.mesh
-        for z in (-mesh.height / 2, mesh.height / 2):
-            pl.add_mesh(self._rim(mesh.radius, z), color=self.FRAME, line_width=2)
-
-    @staticmethod
-    def _rim(radius: float, z: float) -> pyvista.PolyData:
-        theta = np.linspace(0.0, 2.0 * np.pi, 200)
-        points = np.column_stack(
-            [radius * np.cos(theta), radius * np.sin(theta), np.full_like(theta, z)]
-        )
-        return pyvista.Spline(points, 200)
+        pl.add_mesh(self._cylinder(), color="lightblue", opacity=0.3, lighting=True)
 
     @staticmethod
     def _iteration(name: str) -> int:
@@ -212,35 +234,36 @@ class InversionViewer(BaseRenderer):
 
     def _draw(self) -> None:
         pl = self._plotter
-        pl.subplot(0, 1)
         name = self._names[self._index]
-        level = self.level(name, self._fraction)
+        style = {
+            "scalars": name,
+            "cmap": self.CMAP,
+            "clim": self._clim,
+            "lighting": True,
+            "smooth_shading": True,
+        }
+
+        pl.subplot(0, 1)
         pl.add_mesh(
             self.isosurface(name, self._fraction),
-            scalars=name,
-            cmap=self.CMAP,
-            clim=self._clim,
-            smooth_shading=True,
-            specular=0.3,
             name="iso",
-            scalar_bar_args={
-                "title": "condutividade",
-                "color": self.INK,
-                "vertical": True,
-                "position_x": 0.88,
-                "position_y": 0.3,
-                "height": 0.45,
-                "title_font_size": 14,
-                "label_font_size": 12,
-                "width": 0.05,
-                "fmt": "%.2f",
-            },
+            show_scalar_bar=False,
+            **style,
         )
+        level = self.level(name, self._fraction)
         pl.add_text(
-            f"Reconstruída  (k = {self._ks[self._index]}, isosuperfície {level:.2f})",
-            font_size=11,
-            color=self.INK,
+            f"Reconstruída (k = {self._ks[self._index]}, nível {level:.2f})",
+            font_size=12,
+            color="white",
             name="label",
+        )
+
+        pl.subplot(0, 2)
+        pl.add_mesh(
+            self.section(name),
+            name="section",
+            scalar_bar_args=self.BAR,
+            **style,
         )
 
     def _on_iteration(self, value: float) -> None:

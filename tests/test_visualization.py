@@ -214,4 +214,15 @@ def test_viewer_window_and_sliders(saved_grid):
     viewer._on_level(0.8)
     assert np.isclose(viewer._fraction, 0.8)
     assert "iso" in pl.renderers[1].actors
+    assert "section" in pl.renderers[2].actors
     pl.close()
+
+
+def test_viewer_section_keeps_the_far_half(saved_grid):
+    from eit3d.visualization import InversionViewer
+
+    viewer = InversionViewer(EITConfig(), saved_grid, [((0.3, 0.0, 0.3), 0.4)])
+    section = viewer.section("k10")
+    assert np.isclose(section.bounds[2], 0.0, atol=1e-8)
+    assert section.bounds[3] > 0.5
+    assert section.active_scalars_name == "k10"
