@@ -94,14 +94,6 @@ class BaseSolver(ABC):
         c = dolfinx.fem.Constant(self._mesh, PETSc.ScalarType(mean))
         return f * v * ds_f - c * v * self._ds_all
 
-    # Shared implementation
-    def _assemble_and_solve(
-        self,
-        a_form: dolfinx.fem.Form,
-        L_form: dolfinx.fem.Form,
-    ) -> dolfinx.fem.Function:
-        return self._assemble_and_solve_many(a_form, [L_form])[0]
-
     def _assemble_and_solve_many(
         self,
         a_form: dolfinx.fem.Form,

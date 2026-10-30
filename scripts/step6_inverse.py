@@ -21,7 +21,9 @@ TOL_TRANSFER = 1e-2
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(
+        description="Inverse problem with the gradient method (two spheres)"
+    )
     parser.add_argument("--iterations", type=int, default=N_ITER)
     parser.add_argument("--steps", type=float, nargs="+", default=list(STEPS))
     parser.add_argument(

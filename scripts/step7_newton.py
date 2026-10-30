@@ -24,7 +24,7 @@ TOL_TRANSFER = 1e-2
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+        description="Inverse problem with the inexact Newton method (two spheres)"
     )
     parser.add_argument(
         "--outer", type=int, default=N_OUTER, help="outer iterations K_max"

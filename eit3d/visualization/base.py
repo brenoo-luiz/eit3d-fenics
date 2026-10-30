@@ -61,20 +61,6 @@ class BaseRenderer:
         return 2.5 * max(self._config.mesh.radius, self._config.mesh.height)
 
     @staticmethod
-    def _scalar_bar_args(title: str) -> dict:
-        """Standard scalar bar layout for PyVista."""
-        return {
-            "title": title,
-            "title_font_size": 20,
-            "label_font_size": 15,
-            "color": "white",
-            "position_x": 0.03,
-            "position_y": 0.03,
-            "width": 0.42,
-            "height": 0.06,
-        }
-
-    @staticmethod
     def _fmt(value: float) -> str:
         return f"{float(value):g}"
 

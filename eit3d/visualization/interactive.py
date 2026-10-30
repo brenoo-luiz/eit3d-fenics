@@ -131,10 +131,6 @@ class InversionViewer(BaseRenderer):
         self._fraction = self.LEVEL
         self._plotter: pyvista.Plotter | None = None
 
-    @property
-    def names(self) -> list[str]:
-        return self._names
-
     def level(self, name: str, fraction: float) -> float:
         values = self._points.point_data[name]
         low, high = float(np.median(values)), float(values.max())
