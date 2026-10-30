@@ -11,6 +11,7 @@ from eit3d.benchmark import TwoSpheres, boundary_norm, transfer_all
 from eit3d.config import OUTPUTS_DIR
 from eit3d.currents import lateral_measure
 from eit3d.inverse import GradientMethod
+from eit3d.visualization.grid import TRUE_FIELD, save_conductivity
 from eit3d.visualization.static import StaticRenderer
 
 STEPS = (1.0, 0.1, 0.01)
@@ -177,6 +178,13 @@ def main() -> None:
                 axis="y",
                 plane=0.0,
                 clims=clims,
+            )
+        )
+        saved = {TRUE_FIELD: gamma_true} | {f"k{k}": g for k, g in snapshots}
+        outputs.append(
+            save_conductivity(
+                saved,
+                OUTPUTS_DIR / f"step6_gamma_lambda_{step:g}_k{args.iterations}.vtu",
             )
         )
 
